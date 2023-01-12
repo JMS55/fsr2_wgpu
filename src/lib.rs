@@ -13,7 +13,7 @@ use wgpu_core::api::Vulkan;
 
 pub struct Fsr2Context {
     context: FfxFsr2Context,
-    scratch_memory: Vec<u8>, // TODO: Hold Box<[u8]> instead
+    _scratch_memory: Vec<u8>, // TODO: Hold Box<[u8]> instead
 }
 
 impl Fsr2Context {
@@ -24,7 +24,7 @@ impl Fsr2Context {
         initialization_flags: Fsr2InitializationFlags,
     ) -> Self {
         unsafe {
-            // Get underlying Vulkan objects
+            // Get underlying Vulkan objects from wgpu
             let (device, physical_device, get_device_proc_addr) =
                 device.as_hal::<Vulkan, _, _>(|device| {
                     let device = device.unwrap();
@@ -53,7 +53,7 @@ impl Fsr2Context {
                 physical_device,
                 get_device_proc_addr,
             );
-            let interface = interface.assume_init(); // TODO: Need to store interface in rust_context?
+            let interface = interface.assume_init();
 
             // Create an FSR context
             let mut context = MaybeUninit::<FfxFsr2Context>::uninit();
@@ -69,7 +69,7 @@ impl Fsr2Context {
 
             Self {
                 context,
-                scratch_memory,
+                _scratch_memory: scratch_memory,
             }
         }
     }
