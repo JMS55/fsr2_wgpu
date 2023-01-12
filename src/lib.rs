@@ -7,7 +7,7 @@ use fsr::{
     FfxFsr2ContextDescription, FfxFsr2DispatchDescription, FfxFsr2Interface,
 };
 use fsr::{ffxFsr2GetInterfaceVK, ffxFsr2GetScratchMemorySizeVK};
-use std::mem::MaybeUninit;
+use std::mem::{transmute, MaybeUninit};
 use wgpu::Device;
 use wgpu_core::api::Vulkan;
 
@@ -25,8 +25,8 @@ impl Fsr2Context {
     ) -> Self {
         unsafe {
             // Get underlying Vulkan objects
-            let (mut device, physical_device, get_device_proc_addr) = device
-                .as_hal::<Vulkan, _, _>(|device| {
+            let (device, physical_device, get_device_proc_addr) =
+                device.as_hal::<Vulkan, _, _>(|device| {
                     let device = device.unwrap();
                     let raw_device = device.raw_device().handle();
                     let physical_device = device.raw_physical_device();
@@ -62,7 +62,7 @@ impl Fsr2Context {
                 maxRenderSize: max_display_size,
                 displaySize: upscale_render_size,
                 callbacks: interface,
-                device: &mut device as *mut _ as *mut _,
+                device: transmute(device),
             };
             ffxFsr2ContextCreate(context.as_mut_ptr(), &context_description as *const _);
             let context = context.assume_init();
