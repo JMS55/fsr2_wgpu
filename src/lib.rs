@@ -8,13 +8,12 @@ use fsr::{
 };
 use fsr::{ffxFsr2GetInterfaceVK, ffxFsr2GetScratchMemorySizeVK};
 use std::mem::MaybeUninit;
-use std::ptr::addr_of_mut;
 use wgpu::Device;
 use wgpu_core::api::Vulkan;
 
 pub struct Fsr2Context {
     context: FfxFsr2Context,
-    scratch_buffer: Vec<u8>, // TODO: Hold Box<[u8]> instead
+    scratch_memory: Vec<u8>, // TODO: Hold Box<[u8]> instead
 }
 
 impl Fsr2Context {
@@ -41,27 +40,23 @@ impl Fsr2Context {
                     (raw_device, physical_device, get_device_proc_addr)
                 });
 
-            // Setup a struct to hold our FSR objects
-            let mut rust_context = MaybeUninit::<Self>::uninit();
-            let rcp = rust_context.as_mut_ptr();
-
-            // Allocate scrath memory for FSR
+            // Allocate scratch memory for FSR
             let scratch_memory_size = ffxFsr2GetScratchMemorySizeVK(physical_device);
-            let sm = Vec::with_capacity(scratch_memory_size);
-            addr_of_mut!((*rcp).scratch_buffer).write(sm);
+            let mut scratch_memory = Vec::with_capacity(scratch_memory_size);
 
             // Setup an FSR->Vulkan interface
             let mut interface = MaybeUninit::<FfxFsr2Interface>::uninit();
             ffxFsr2GetInterfaceVK(
                 interface.as_mut_ptr(),
-                addr_of_mut!((*rcp).scratch_buffer) as *mut _,
+                scratch_memory.as_mut_ptr() as *mut _,
                 scratch_memory_size,
                 physical_device,
                 get_device_proc_addr,
             );
-            let interface = interface.assume_init(); // TODO: Store interface in rust_context?
+            let interface = interface.assume_init(); // TODO: Need to store interface in rust_context?
 
             // Create an FSR context
+            let mut context = MaybeUninit::<FfxFsr2Context>::uninit();
             let context_description = FfxFsr2ContextDescription {
                 flags: initialization_flags.bits(),
                 maxRenderSize: max_display_size,
@@ -69,12 +64,13 @@ impl Fsr2Context {
                 callbacks: interface,
                 device: &mut device as *mut _ as *mut _,
             };
-            ffxFsr2ContextCreate(
-                addr_of_mut!((*rcp).context) as *mut _,
-                &context_description as *const _,
-            );
+            ffxFsr2ContextCreate(context.as_mut_ptr(), &context_description as *const _);
+            let context = context.assume_init();
 
-            rust_context.assume_init()
+            Self {
+                context,
+                scratch_memory,
+            }
         }
     }
 
