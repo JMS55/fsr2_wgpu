@@ -22,6 +22,7 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Fsr2QualityMode {
     Quality,
     Balanced,
@@ -29,4 +30,18 @@ pub enum Fsr2QualityMode {
     UltraPerformance,
 }
 
+pub struct Fsr2Texture {
+    pub texture: wgpu::Texture,
+    pub view: wgpu::TextureView,
+    pub format: wgpu::TextureFormat,
+    pub width: u32,
+    pub height: u32,
+}
+
+pub enum Fsr2Sharpen {
+    Disabled,
+    Enabled(f32),
+}
+
 pub type Fsr2Resolution = FfxDimensions2D;
+pub type Fsr2FloatCoordinates = FfxFloatCoords2D;
