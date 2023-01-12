@@ -1,6 +1,8 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+#![allow(unused)]
+#![allow(improper_ctypes)] // https://github.com/rust-lang/rust-bindgen/issues/1549
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
@@ -19,3 +21,12 @@ bitflags::bitflags! {
         const TEXTURE_1D = FfxFsr2InitializationFlagBits_FFX_FSR2_ENABLE_TEXTURE1D_USAGE;
     }
 }
+
+pub enum Fsr2QualityMode {
+    Quality,
+    Balanced,
+    Performance,
+    UltraPerformance,
+}
+
+pub type Fsr2Resolution = FfxDimensions2D;

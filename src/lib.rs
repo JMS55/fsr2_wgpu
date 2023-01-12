@@ -1,6 +1,6 @@
 mod fsr;
 
-pub use fsr::{FfxDimensions2D, Fsr2InitializationFlags};
+pub use fsr::{Fsr2InitializationFlags, Fsr2QualityMode, Fsr2Resolution};
 
 use fsr::{
     ffxFsr2ContextCreate, ffxFsr2ContextDestroy, ffxFsr2ContextDispatch, FfxFsr2Context,
@@ -19,8 +19,8 @@ pub struct Fsr2Context {
 impl Fsr2Context {
     pub fn new(
         device: &Device,
-        max_display_size: FfxDimensions2D,
-        upscale_render_size: FfxDimensions2D,
+        max_input_resolution: Fsr2Resolution,
+        upscaled_resolution: Fsr2Resolution,
         initialization_flags: Fsr2InitializationFlags,
     ) -> Self {
         unsafe {
@@ -59,8 +59,8 @@ impl Fsr2Context {
             let mut context = MaybeUninit::<FfxFsr2Context>::uninit();
             let context_description = FfxFsr2ContextDescription {
                 flags: initialization_flags.bits(),
-                maxRenderSize: max_display_size,
-                displaySize: upscale_render_size,
+                maxRenderSize: max_input_resolution,
+                displaySize: upscaled_resolution,
                 callbacks: interface,
                 device: transmute(device),
             };
