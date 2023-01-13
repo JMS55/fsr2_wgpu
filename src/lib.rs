@@ -86,7 +86,10 @@ impl Fsr2Context {
         }
     }
 
-    pub fn resize_if_needed(&mut self, new_upscaled_resolution: Fsr2Resolution) {
+    pub fn set_new_upscale_resolution_if_changed(
+        &mut self,
+        new_upscaled_resolution: Fsr2Resolution,
+    ) {
         if self.upscaled_resolution.width != new_upscaled_resolution.width
             || self.upscaled_resolution.height != new_upscaled_resolution.height
         {
