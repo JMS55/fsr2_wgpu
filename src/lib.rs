@@ -17,7 +17,7 @@ use fsr::{
 use std::mem::MaybeUninit;
 use std::ptr;
 use std::time::Duration;
-use wgpu::{CommandEncoder, Device};
+use wgpu::{Adapter, CommandEncoder, Device};
 use wgpu_core::api::Vulkan;
 
 // TODO: Documentation for the whole library
@@ -130,6 +130,7 @@ impl Fsr2Context {
         camera_far: Option<f32>,
         camera_fov_angle_vertical: f32,
         jitter_offset: Fsr2FloatCoordinates,
+        adapter: &Adapter,
         command_encoder: &mut CommandEncoder,
     ) {
         unsafe {
@@ -142,8 +143,10 @@ impl Fsr2Context {
             };
 
             let reactive = match reactive_mask {
-                Fsr2ReactiveMask::NoMask => self.texture_to_ffx_resource(None),
-                Fsr2ReactiveMask::ManualMask(mask) => self.texture_to_ffx_resource(Some(mask)),
+                Fsr2ReactiveMask::NoMask => self.texture_to_ffx_resource(None, adapter),
+                Fsr2ReactiveMask::ManualMask(mask) => {
+                    self.texture_to_ffx_resource(Some(mask), adapter)
+                }
                 Fsr2ReactiveMask::AutoMask {
                     color_opaque_only,
                     color_opauqe_and_transparent,
@@ -158,14 +161,14 @@ impl Fsr2Context {
                 commandList: ffxGetCommandListVK(
                     command_encoder.as_hal_mut::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
                 ),
-                color: self.texture_to_ffx_resource(Some(color)),
-                depth: self.texture_to_ffx_resource(Some(depth)),
-                motionVectors: self.texture_to_ffx_resource(Some(motion_vectors)),
-                exposure: self.texture_to_ffx_resource(exposure),
+                color: self.texture_to_ffx_resource(Some(color), adapter),
+                depth: self.texture_to_ffx_resource(Some(depth), adapter),
+                motionVectors: self.texture_to_ffx_resource(Some(motion_vectors), adapter),
+                exposure: self.texture_to_ffx_resource(exposure, adapter),
                 reactive,
                 transparencyAndComposition: self
-                    .texture_to_ffx_resource(transparency_and_composition_mask),
-                output: self.texture_to_ffx_resource(Some(output)),
+                    .texture_to_ffx_resource(transparency_and_composition_mask, adapter),
+                output: self.texture_to_ffx_resource(Some(output), adapter),
                 jitterOffset: jitter_offset,
                 motionVectorScale: motion_vector_scale
                     .unwrap_or(Fsr2FloatCoordinates { x: 1.0, y: 1.0 }),
@@ -190,21 +193,26 @@ impl Fsr2Context {
         }
     }
 
-    unsafe fn texture_to_ffx_resource(&mut self, texture: Option<Fsr2Texture>) -> FfxResource {
-        match texture {
-            Some(Fsr2Texture { texture, view }) => ffxGetTextureResourceVK(
+    unsafe fn texture_to_ffx_resource(
+        &mut self,
+        texture: Option<Fsr2Texture>,
+        adapter: &Adapter,
+    ) -> FfxResource {
+        if let Some(Fsr2Texture { texture, view }) = texture {
+            ffxGetTextureResourceVK(
                 &mut self.context as *mut _,
                 texture.as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
                 view.as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
                 texture.width(),
                 texture.height(),
-                // texture.format(),
-                todo!(),
+                adapter
+                    .texture_format_as_hal::<Vulkan>(texture.format())
+                    .unwrap(),
                 ptr::null_mut(),
                 FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
-            ),
-
-            None => ffxGetTextureResourceVK(
+            )
+        } else {
+            ffxGetTextureResourceVK(
                 &mut self.context as *mut _,
                 ash::vk::Image::null(),
                 ash::vk::ImageView::null(),
@@ -213,7 +221,7 @@ impl Fsr2Context {
                 ash::vk::Format::UNDEFINED,
                 ptr::null_mut(),
                 FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
-            ),
+            )
         }
     }
 }
