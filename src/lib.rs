@@ -11,7 +11,8 @@ use fsr::{
     FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
 };
 use fsr::{
-    ffxFsr2GetInterfaceVK, ffxFsr2GetScratchMemorySizeVK, ffxGetDeviceVK, ffxGetTextureResourceVK,
+    ffxFsr2GetInterfaceVK, ffxFsr2GetScratchMemorySizeVK, ffxGetCommandListVK, ffxGetDeviceVK,
+    ffxGetTextureResourceVK,
 };
 use std::mem::MaybeUninit;
 use std::ptr;
@@ -129,10 +130,10 @@ impl Fsr2Context {
         camera_far: Option<f32>,
         camera_fov_angle_vertical: f32,
         jitter_offset: Fsr2FloatCoordinates,
-        command_encoder: &CommandEncoder,
+        command_encoder: &mut CommandEncoder,
     ) {
         unsafe {
-            let (exposure, preExposure) = match exposure {
+            let (exposure, pre_exposure) = match exposure {
                 Fsr2Exposure::AutoExposure => (None, 0.0),
                 Fsr2Exposure::ManualExposure {
                     pre_exposure,
@@ -154,7 +155,9 @@ impl Fsr2Context {
             };
 
             let dispatch_description = FfxFsr2DispatchDescription {
-                commandList: todo!(),
+                commandList: ffxGetCommandListVK(
+                    command_encoder.as_hal_mut::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
+                ),
                 color: self.texture_to_ffx_resource(Some(color)),
                 depth: self.texture_to_ffx_resource(Some(depth)),
                 motionVectors: self.texture_to_ffx_resource(Some(motion_vectors)),
@@ -173,7 +176,7 @@ impl Fsr2Context {
                     Fsr2Sharpen::Enabled { sharpness } => sharpness.clamp(0.0, 1.0),
                 },
                 frameTimeDelta: frame_delta_time.as_millis() as f32,
-                preExposure,
+                preExposure: pre_exposure,
                 reset,
                 cameraNear: camera_near,
                 cameraFar: camera_far.unwrap_or(0.0),
@@ -189,22 +192,28 @@ impl Fsr2Context {
 
     unsafe fn texture_to_ffx_resource(&mut self, texture: Option<Fsr2Texture>) -> FfxResource {
         match texture {
-            Some(texture) => todo!(),
-            // Some(texture) => ffxGetTextureResourceVK(
-            //     &mut self.context as *mut _,
-            //     texture
-            //         .texture
-            //         .as_hal::<Vulkan, _>(|x| x.unwrap().raw_handle()),
-            //     texture
-            //         .view
-            //         .as_hal::<Vulkan, _>(|t| x.unwrap().raw_handle()),
-            //     texture.width,
-            //     texture.height,
-            //     texture.format,
-            //     ptr::null_mut(),
-            //     FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
-            // ),
-            None => todo!(),
+            Some(Fsr2Texture { texture, view }) => ffxGetTextureResourceVK(
+                &mut self.context as *mut _,
+                texture.as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
+                view.as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
+                texture.width(),
+                texture.height(),
+                // texture.format(),
+                todo!(),
+                ptr::null_mut(),
+                FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
+            ),
+
+            None => ffxGetTextureResourceVK(
+                &mut self.context as *mut _,
+                ash::vk::Image::null(),
+                ash::vk::ImageView::null(),
+                1,
+                1,
+                ash::vk::Format::UNDEFINED,
+                ptr::null_mut(),
+                FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
+            ),
         }
     }
 }

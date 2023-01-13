@@ -8,6 +8,10 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 type VkPhysicalDevice = ash::vk::PhysicalDevice;
 type VkDevice = ash::vk::Device;
+type VkImage = ash::vk::Image;
+type VkImageView = ash::vk::ImageView;
+type VkFormat = ash::vk::Format;
+type VkCommandBuffer = ash::vk::CommandBuffer;
 type PFN_vkGetDeviceProcAddr = ash::vk::PFN_vkGetDeviceProcAddr;
 
 bitflags::bitflags! {
@@ -34,9 +38,6 @@ pub enum Fsr2QualityMode {
 pub struct Fsr2Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub format: wgpu::TextureFormat,
-    pub width: u32,
-    pub height: u32,
 }
 
 pub enum Fsr2Exposure {

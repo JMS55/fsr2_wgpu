@@ -24,6 +24,10 @@ fn main() {
         .clang_args(["-x", "c++", "-fdeclspec"])
         .blocklist_type("VkPhysicalDevice")
         .blocklist_type("VkDevice")
+        .blocklist_type("VkImage")
+        .blocklist_type("VkImageView")
+        .blocklist_type("VkFormat")
+        .blocklist_type("VkCommandBuffer")
         .blocklist_type("PFN_vkGetDeviceProcAddr")
         .generate()
         .unwrap();
