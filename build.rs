@@ -4,8 +4,17 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rustc-link-search=native=./fsr2/lib");
+
+    #[cfg(debug_assertions)]
     println!("cargo:rustc-link-lib=static=ffx_fsr2_api_x86_64d");
+    #[cfg(not(debug_assertions))]
+    println!("cargo:rustc-link-lib=static=ffx_fsr2_api_x86_64");
+
+    #[cfg(debug_assertions)]
     println!("cargo:rustc-link-lib=static=ffx_fsr2_api_vk_x86_64d");
+    #[cfg(not(debug_assertions))]
+    println!("cargo:rustc-link-lib=static=ffx_fsr2_api_vk_x86_64");
+
     println!("cargo:rustc-link-lib=dylib=stdc++");
     println!("cargo:rustc-link-lib=dylib=vulkan");
 
@@ -14,6 +23,7 @@ fn main() {
         .header("fsr2/include/vk/ffx_fsr2_vk.h")
         .clang_args(["-x", "c++", "-fdeclspec"])
         .blocklist_type("VkPhysicalDevice")
+        .blocklist_type("VkDevice")
         .blocklist_type("PFN_vkGetDeviceProcAddr")
         .generate()
         .unwrap();

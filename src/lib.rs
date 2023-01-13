@@ -10,17 +10,21 @@ use fsr::{
     FfxFsr2ContextDescription, FfxFsr2DispatchDescription, FfxFsr2Interface, FfxResource,
     FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
 };
-use fsr::{ffxFsr2GetInterfaceVK, ffxFsr2GetScratchMemorySizeVK, ffxGetTextureResourceVK};
-use std::mem::{transmute, MaybeUninit};
+use fsr::{
+    ffxFsr2GetInterfaceVK, ffxFsr2GetScratchMemorySizeVK, ffxGetDeviceVK, ffxGetTextureResourceVK,
+};
+use std::mem::MaybeUninit;
 use std::ptr;
 use std::time::Duration;
-use wgpu::Device;
+use wgpu::{CommandEncoder, Device};
 use wgpu_core::api::Vulkan;
+
+// TODO: Documentation for the whole library
 
 pub struct Fsr2Context {
     context: FfxFsr2Context,
     upscaled_resolution: Fsr2Resolution,
-    _scratch_memory: Vec<u8>, // TODO: Hold Box<[u8]> instead
+    _scratch_memory: Vec<u8>,
 }
 
 impl Fsr2Context {
@@ -69,7 +73,7 @@ impl Fsr2Context {
                 maxRenderSize: max_input_resolution,
                 displaySize: upscaled_resolution,
                 callbacks: interface,
-                device: transmute(device),
+                device: ffxGetDeviceVK(device),
             };
             ffxFsr2ContextCreate(context.as_mut_ptr(), &context_description as *const _);
             let context = context.assume_init();
@@ -79,6 +83,14 @@ impl Fsr2Context {
                 upscaled_resolution,
                 _scratch_memory: scratch_memory,
             }
+        }
+    }
+
+    pub fn resize_if_needed(&mut self, new_upscaled_resolution: Fsr2Resolution) {
+        if self.upscaled_resolution.width != new_upscaled_resolution.width
+            || self.upscaled_resolution.height != new_upscaled_resolution.height
+        {
+            todo!("Recreate context, destroy old one");
         }
     }
 
@@ -104,7 +116,7 @@ impl Fsr2Context {
         motion_vector_scale: Option<Fsr2FloatCoordinates>,
         exposure: Option<Fsr2Texture>,
         pre_exposure: Option<f32>,
-        // TODO: Change from Option to enum of disabled, provided, auto-generated
+        // TODO: Change from Option to enum of disabled, user-provided, auto-generated
         reactive_mask: Option<Fsr2Texture>,
         transparency_and_composition_mask: Option<Fsr2Texture>,
         output: Fsr2Texture,
@@ -116,6 +128,7 @@ impl Fsr2Context {
         camera_far: Option<f32>,
         camera_fov_angle_vertical: f32,
         jitter_offset: Fsr2FloatCoordinates,
+        command_encoder: &CommandEncoder,
     ) {
         unsafe {
             let dispatch_description = FfxFsr2DispatchDescription {
@@ -177,7 +190,7 @@ impl Fsr2Context {
 impl Drop for Fsr2Context {
     fn drop(&mut self) {
         unsafe {
-            // TODO: Wait for FSR resources to not be in use
+            // TODO: Wait for FSR resources to not be in use somehow
             ffxFsr2ContextDestroy(&mut self.context as *mut _);
         }
     }

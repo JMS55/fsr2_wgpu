@@ -7,6 +7,7 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 type VkPhysicalDevice = ash::vk::PhysicalDevice;
+type VkDevice = ash::vk::Device;
 type PFN_vkGetDeviceProcAddr = ash::vk::PFN_vkGetDeviceProcAddr;
 
 bitflags::bitflags! {
