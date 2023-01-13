@@ -1,8 +1,8 @@
 mod fsr;
 
 pub use fsr::{
-    Fsr2FloatCoordinates, Fsr2InitializationFlags, Fsr2QualityMode, Fsr2Resolution, Fsr2Sharpen,
-    Fsr2Texture,
+    Fsr2Exposure, Fsr2FloatCoordinates, Fsr2InitializationFlags, Fsr2QualityMode, Fsr2ReactiveMask,
+    Fsr2Resolution, Fsr2Sharpen, Fsr2Texture,
 };
 
 use fsr::{
@@ -117,10 +117,8 @@ impl Fsr2Context {
         depth: Fsr2Texture,
         motion_vectors: Fsr2Texture,
         motion_vector_scale: Option<Fsr2FloatCoordinates>,
-        exposure: Option<Fsr2Texture>,
-        pre_exposure: Option<f32>,
-        // TODO: Change from Option to enum of disabled, user-provided, auto-generated
-        reactive_mask: Option<Fsr2Texture>,
+        exposure: Fsr2Exposure,
+        reactive_mask: Fsr2ReactiveMask,
         transparency_and_composition_mask: Option<Fsr2Texture>,
         output: Fsr2Texture,
         input_resolution: Fsr2Resolution,
@@ -134,13 +132,34 @@ impl Fsr2Context {
         command_encoder: &CommandEncoder,
     ) {
         unsafe {
+            let (exposure, preExposure) = match exposure {
+                Fsr2Exposure::AutoExposure => (None, 0.0),
+                Fsr2Exposure::ManualExposure {
+                    pre_exposure,
+                    exposure,
+                } => (Some(exposure), pre_exposure),
+            };
+
+            let reactive = match reactive_mask {
+                Fsr2ReactiveMask::NoMask => self.texture_to_ffx_resource(None),
+                Fsr2ReactiveMask::ManualMask(mask) => self.texture_to_ffx_resource(Some(mask)),
+                Fsr2ReactiveMask::AutoMask {
+                    color_opaque_only,
+                    color_opauqe_and_transparent,
+                    scale,
+                    threshold,
+                    binary_value,
+                    flags,
+                } => todo!(),
+            };
+
             let dispatch_description = FfxFsr2DispatchDescription {
                 commandList: todo!(),
                 color: self.texture_to_ffx_resource(Some(color)),
                 depth: self.texture_to_ffx_resource(Some(depth)),
                 motionVectors: self.texture_to_ffx_resource(Some(motion_vectors)),
                 exposure: self.texture_to_ffx_resource(exposure),
-                reactive: self.texture_to_ffx_resource(reactive_mask),
+                reactive,
                 transparencyAndComposition: self
                     .texture_to_ffx_resource(transparency_and_composition_mask),
                 output: self.texture_to_ffx_resource(Some(output)),
@@ -151,10 +170,10 @@ impl Fsr2Context {
                 enableSharpening: !matches!(sharpen, Fsr2Sharpen::Disabled),
                 sharpness: match sharpen {
                     Fsr2Sharpen::Disabled => 0.0,
-                    Fsr2Sharpen::Enabled(sharpness) => sharpness.clamp(0.0, 1.0),
+                    Fsr2Sharpen::Enabled { sharpness } => sharpness.clamp(0.0, 1.0),
                 },
                 frameTimeDelta: frame_delta_time.as_millis() as f32,
-                preExposure: pre_exposure.unwrap_or(1.0),
+                preExposure,
                 reset,
                 cameraNear: camera_near,
                 cameraFar: camera_far.unwrap_or(0.0),

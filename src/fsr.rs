@@ -39,9 +39,36 @@ pub struct Fsr2Texture {
     pub height: u32,
 }
 
+pub enum Fsr2Exposure {
+    AutoExposure,
+    ManualExposure {
+        pre_exposure: f32,
+        exposure: Fsr2Texture,
+    },
+}
+
+pub enum Fsr2ReactiveMask {
+    NoMask,
+    ManualMask(Fsr2Texture),
+    AutoMask {
+        color_opaque_only: Fsr2Texture,
+        color_opauqe_and_transparent: Fsr2Texture,
+        scale: f32,
+        threshold: f32,
+        binary_value: f32,
+        flags: Fsr2AutoGenerateReactiveMaskFlags,
+    },
+}
+
+bitflags::bitflags! {
+    pub struct Fsr2AutoGenerateReactiveMaskFlags: u32 {
+      // TODO
+    }
+}
+
 pub enum Fsr2Sharpen {
     Disabled,
-    Enabled(f32),
+    Enabled { sharpness: f32 },
 }
 
 pub type Fsr2Resolution = FfxDimensions2D;
