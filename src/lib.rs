@@ -1,12 +1,13 @@
 mod fsr;
 
 pub use fsr::{
-    Fsr2Exposure, Fsr2FloatCoordinates, Fsr2InitializationFlags, Fsr2QualityMode, Fsr2ReactiveMask,
-    Fsr2Resolution, Fsr2Sharpen, Fsr2Texture,
+    Fsr2Exposure, Fsr2InitializationFlags, Fsr2QualityMode, Fsr2ReactiveMask, Fsr2Sharpen,
+    Fsr2Texture,
 };
 
 use fsr::{
-    ffxFsr2ContextCreate, ffxFsr2ContextDestroy, ffxFsr2ContextDispatch, FfxFsr2Context,
+    ffxFsr2ContextCreate, ffxFsr2ContextDestroy, ffxFsr2ContextDispatch, ffxFsr2GetJitterOffset,
+    ffxFsr2GetJitterPhaseCount, FfxDimensions2D, FfxFloatCoords2D, FfxFsr2Context,
     FfxFsr2ContextDescription, FfxFsr2DispatchDescription, FfxFsr2Interface, FfxResource,
     FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
 };
@@ -14,6 +15,7 @@ use fsr::{
     ffxFsr2GetInterfaceVK, ffxFsr2GetScratchMemorySizeVK, ffxGetCommandListVK, ffxGetDeviceVK,
     ffxGetTextureResourceVK,
 };
+use glam::{Mat4, UVec2, Vec2, Vec3};
 use std::mem::MaybeUninit;
 use std::ptr;
 use std::time::Duration;
@@ -24,15 +26,15 @@ use wgpu_core::api::Vulkan;
 
 pub struct Fsr2Context {
     context: FfxFsr2Context,
-    upscaled_resolution: Fsr2Resolution,
+    upscaled_resolution: UVec2,
     _scratch_memory: Vec<u8>,
 }
 
 impl Fsr2Context {
     pub fn new(
         device: &Device,
-        max_input_resolution: Fsr2Resolution,
-        upscaled_resolution: Fsr2Resolution,
+        max_input_resolution: UVec2,
+        upscaled_resolution: UVec2,
         initialization_flags: Fsr2InitializationFlags,
     ) -> Self {
         unsafe {
@@ -71,8 +73,8 @@ impl Fsr2Context {
             let mut context = MaybeUninit::<FfxFsr2Context>::uninit();
             let context_description = FfxFsr2ContextDescription {
                 flags: initialization_flags.bits(),
-                maxRenderSize: max_input_resolution,
-                displaySize: upscaled_resolution,
+                maxRenderSize: uvec2_to_dim2d(max_input_resolution),
+                displaySize: uvec2_to_dim2d(upscaled_resolution),
                 callbacks: interface,
                 device: ffxGetDeviceVK(device),
             };
@@ -87,18 +89,13 @@ impl Fsr2Context {
         }
     }
 
-    pub fn set_new_upscale_resolution_if_changed(
-        &mut self,
-        new_upscaled_resolution: Fsr2Resolution,
-    ) {
-        if self.upscaled_resolution.width != new_upscaled_resolution.width
-            || self.upscaled_resolution.height != new_upscaled_resolution.height
-        {
+    pub fn set_new_upscale_resolution_if_changed(&mut self, new_upscaled_resolution: UVec2) {
+        if new_upscaled_resolution != self.upscaled_resolution {
             todo!("Recreate context, destroy old one");
         }
     }
 
-    pub fn determine_input_resolution(&self, quality_mode: Fsr2QualityMode) -> Fsr2Resolution {
+    pub fn get_suggested_input_resolution(&self, quality_mode: Fsr2QualityMode) -> UVec2 {
         let scale_factor = match quality_mode {
             Fsr2QualityMode::Quality => 1.5,
             Fsr2QualityMode::Balanced => 1.7,
@@ -106,9 +103,45 @@ impl Fsr2Context {
             Fsr2QualityMode::UltraPerformance => 3.0,
         };
 
-        Fsr2Resolution {
-            width: (self.upscaled_resolution.width as f32 / scale_factor) as u32,
-            height: (self.upscaled_resolution.height as f32 / scale_factor) as u32,
+        (self.upscaled_resolution.as_vec2() / scale_factor).as_uvec2()
+    }
+
+    pub fn jitter_camera_projection_matrix(
+        &self,
+        matrix: &mut Mat4,
+        input_resolution: UVec2,
+        frame_index: i32,
+    ) -> Vec2 {
+        let jitter_offset = self.get_camera_jitter_offset(input_resolution, frame_index);
+
+        let mut translation = 2.0 * jitter_offset / input_resolution.as_vec2();
+        translation.y *= -1.0;
+
+        let translation = Mat4::from_translation(Vec3 {
+            x: translation.x,
+            y: translation.y,
+            z: 0.0,
+        });
+        *matrix = translation * *matrix;
+
+        jitter_offset
+    }
+
+    pub fn get_camera_jitter_offset(&self, input_resolution: UVec2, frame_index: i32) -> Vec2 {
+        unsafe {
+            let phase_count = ffxFsr2GetJitterPhaseCount(
+                input_resolution.x.try_into().unwrap(),
+                self.upscaled_resolution.x.try_into().unwrap(),
+            );
+
+            let mut jitter_offset = Vec2::ZERO;
+            ffxFsr2GetJitterOffset(
+                &mut jitter_offset.x as *mut _,
+                &mut jitter_offset.y as *mut _,
+                frame_index,
+                phase_count,
+            );
+            jitter_offset
         }
     }
 
@@ -117,19 +150,19 @@ impl Fsr2Context {
         color: Fsr2Texture,
         depth: Fsr2Texture,
         motion_vectors: Fsr2Texture,
-        motion_vector_scale: Option<Fsr2FloatCoordinates>,
+        motion_vector_scale: Option<Vec2>,
         exposure: Fsr2Exposure,
         reactive_mask: Fsr2ReactiveMask,
         transparency_and_composition_mask: Option<Fsr2Texture>,
         output: Fsr2Texture,
-        input_resolution: Fsr2Resolution,
+        input_resolution: UVec2,
         sharpen: Fsr2Sharpen,
         frame_delta_time: Duration,
         reset: bool,
         camera_near: f32,
         camera_far: Option<f32>,
         camera_fov_angle_vertical: f32,
-        jitter_offset: Fsr2FloatCoordinates,
+        jitter_offset: Vec2,
         adapter: &Adapter,
         command_encoder: &mut CommandEncoder,
     ) {
@@ -169,10 +202,9 @@ impl Fsr2Context {
                 transparencyAndComposition: self
                     .texture_to_ffx_resource(transparency_and_composition_mask, adapter),
                 output: self.texture_to_ffx_resource(Some(output), adapter),
-                jitterOffset: jitter_offset,
-                motionVectorScale: motion_vector_scale
-                    .unwrap_or(Fsr2FloatCoordinates { x: 1.0, y: 1.0 }),
-                renderSize: input_resolution,
+                jitterOffset: vec2_to_float_coords2d(jitter_offset),
+                motionVectorScale: vec2_to_float_coords2d(motion_vector_scale.unwrap_or(Vec2::ONE)),
+                renderSize: uvec2_to_dim2d(input_resolution),
                 enableSharpening: !matches!(sharpen, Fsr2Sharpen::Disabled),
                 sharpness: match sharpen {
                     Fsr2Sharpen::Disabled => 0.0,
@@ -233,4 +265,15 @@ impl Drop for Fsr2Context {
             ffxFsr2ContextDestroy(&mut self.context as *mut _);
         }
     }
+}
+
+fn uvec2_to_dim2d(vec: UVec2) -> FfxDimensions2D {
+    FfxDimensions2D {
+        width: vec.x,
+        height: vec.y,
+    }
+}
+
+fn vec2_to_float_coords2d(vec: Vec2) -> FfxFloatCoords2D {
+    FfxFloatCoords2D { x: vec.x, y: vec.y }
 }

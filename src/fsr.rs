@@ -71,6 +71,3 @@ pub enum Fsr2Sharpen {
     Disabled,
     Enabled { sharpness: f32 },
 }
-
-pub type Fsr2Resolution = FfxDimensions2D;
-pub type Fsr2FloatCoordinates = FfxFloatCoords2D;
