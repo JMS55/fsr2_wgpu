@@ -145,6 +145,10 @@ impl Fsr2Context {
         }
     }
 
+    pub fn get_mip_bias(&self, input_resolution: UVec2) -> f32 {
+        (input_resolution.x as f32 / self.upscaled_resolution.x as f32).log2() - 1.0
+    }
+
     pub fn render(
         &mut self,
         color: Fsr2Texture,
