@@ -149,29 +149,10 @@ impl Fsr2Context {
         (input_resolution.x as f32 / self.upscaled_resolution.x as f32).log2() - 1.0
     }
 
-    pub fn render(
-        &mut self,
-        color: Fsr2Texture,
-        depth: Fsr2Texture,
-        motion_vectors: Fsr2Texture,
-        motion_vector_scale: Option<Vec2>,
-        exposure: Fsr2Exposure,
-        reactive_mask: Fsr2ReactiveMask,
-        transparency_and_composition_mask: Option<Fsr2Texture>,
-        output: Fsr2Texture,
-        input_resolution: UVec2,
-        sharpness: f32,
-        frame_delta_time: Duration,
-        reset: bool,
-        camera_near: f32,
-        camera_far: Option<f32>,
-        camera_fov_angle_vertical: f32,
-        jitter_offset: Vec2,
-        adapter: &Adapter,
-        command_encoder: &mut CommandEncoder,
-    ) {
+    pub fn render(&mut self, parameters: Fsr2RenderParameters) {
+        let adapter = &parameters.adapter;
         unsafe {
-            let (exposure, pre_exposure) = match exposure {
+            let (exposure, pre_exposure) = match parameters.exposure {
                 Fsr2Exposure::AutoExposure => (None, 0.0),
                 Fsr2Exposure::ManualExposure {
                     pre_exposure,
@@ -179,7 +160,7 @@ impl Fsr2Context {
                 } => (Some(exposure), pre_exposure),
             };
 
-            let reactive = match reactive_mask {
+            let reactive = match parameters.reactive_mask {
                 Fsr2ReactiveMask::NoMask => self.texture_to_ffx_resource(None, adapter),
                 Fsr2ReactiveMask::ManualMask(mask) => {
                     self.texture_to_ffx_resource(Some(mask), adapter)
@@ -196,27 +177,32 @@ impl Fsr2Context {
 
             let dispatch_description = FfxFsr2DispatchDescription {
                 commandList: ffxGetCommandListVK(
-                    command_encoder.as_hal_mut::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
+                    parameters
+                        .command_encoder
+                        .as_hal_mut::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
                 ),
-                color: self.texture_to_ffx_resource(Some(color), adapter),
-                depth: self.texture_to_ffx_resource(Some(depth), adapter),
-                motionVectors: self.texture_to_ffx_resource(Some(motion_vectors), adapter),
+                color: self.texture_to_ffx_resource(Some(parameters.color), adapter),
+                depth: self.texture_to_ffx_resource(Some(parameters.depth), adapter),
+                motionVectors: self
+                    .texture_to_ffx_resource(Some(parameters.motion_vectors), adapter),
                 exposure: self.texture_to_ffx_resource(exposure, adapter),
                 reactive,
                 transparencyAndComposition: self
-                    .texture_to_ffx_resource(transparency_and_composition_mask, adapter),
-                output: self.texture_to_ffx_resource(Some(output), adapter),
-                jitterOffset: vec2_to_float_coords2d(jitter_offset),
-                motionVectorScale: vec2_to_float_coords2d(motion_vector_scale.unwrap_or(Vec2::ONE)),
-                renderSize: uvec2_to_dim2d(input_resolution),
-                enableSharpening: sharpness > 0.0,
-                sharpness: sharpness.clamp(0.0, 1.0),
-                frameTimeDelta: frame_delta_time.as_millis() as f32,
+                    .texture_to_ffx_resource(parameters.transparency_and_composition_mask, adapter),
+                output: self.texture_to_ffx_resource(Some(parameters.output), adapter),
+                jitterOffset: vec2_to_float_coords2d(parameters.jitter_offset),
+                motionVectorScale: vec2_to_float_coords2d(
+                    parameters.motion_vector_scale.unwrap_or(Vec2::ONE),
+                ),
+                renderSize: uvec2_to_dim2d(parameters.input_resolution),
+                enableSharpening: parameters.sharpness > 0.0,
+                sharpness: parameters.sharpness.clamp(0.0, 1.0),
+                frameTimeDelta: parameters.frame_delta_time.as_millis() as f32,
                 preExposure: pre_exposure,
-                reset,
-                cameraNear: camera_near,
-                cameraFar: camera_far.unwrap_or(0.0),
-                cameraFovAngleVertical: camera_fov_angle_vertical,
+                reset: parameters.reset,
+                cameraNear: parameters.camera_near,
+                cameraFar: parameters.camera_far.unwrap_or(0.0),
+                cameraFovAngleVertical: parameters.camera_fov_angle_vertical,
             };
 
             ffxFsr2ContextDispatch(
@@ -266,6 +252,27 @@ impl Drop for Fsr2Context {
             ffxFsr2ContextDestroy(&mut self.context as *mut _);
         }
     }
+}
+
+pub struct Fsr2RenderParameters<'a> {
+    pub color: Fsr2Texture<'a>,
+    pub depth: Fsr2Texture<'a>,
+    pub motion_vectors: Fsr2Texture<'a>,
+    pub motion_vector_scale: Option<Vec2>,
+    pub exposure: Fsr2Exposure<'a>,
+    pub reactive_mask: Fsr2ReactiveMask<'a>,
+    pub transparency_and_composition_mask: Option<Fsr2Texture<'a>>,
+    pub output: Fsr2Texture<'a>,
+    pub input_resolution: UVec2,
+    pub sharpness: f32,
+    pub frame_delta_time: Duration,
+    pub reset: bool,
+    pub camera_near: f32,
+    pub camera_far: Option<f32>,
+    pub camera_fov_angle_vertical: f32,
+    pub jitter_offset: Vec2,
+    pub adapter: &'a Adapter,
+    pub command_encoder: &'a mut CommandEncoder,
 }
 
 fn uvec2_to_dim2d(vec: UVec2) -> FfxDimensions2D {
