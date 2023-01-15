@@ -35,25 +35,25 @@ pub enum Fsr2QualityMode {
     UltraPerformance,
 }
 
-pub struct Fsr2Texture {
-    pub texture: wgpu::Texture,
-    pub view: wgpu::TextureView,
+pub struct Fsr2Texture<'a> {
+    pub texture: &'a wgpu::Texture,
+    pub view: &'a wgpu::TextureView,
 }
 
-pub enum Fsr2Exposure {
+pub enum Fsr2Exposure<'a> {
     AutoExposure,
     ManualExposure {
         pre_exposure: f32,
-        exposure: Fsr2Texture,
+        exposure: Fsr2Texture<'a>,
     },
 }
 
-pub enum Fsr2ReactiveMask {
+pub enum Fsr2ReactiveMask<'a> {
     NoMask,
-    ManualMask(Fsr2Texture),
+    ManualMask(Fsr2Texture<'a>),
     AutoMask {
-        color_opaque_only: Fsr2Texture,
-        color_opauqe_and_transparent: Fsr2Texture,
+        color_opaque_only: Fsr2Texture<'a>,
+        color_opaque_and_transparent: Fsr2Texture<'a>,
         scale: f32,
         threshold: f32,
         binary_value: f32,
@@ -65,9 +65,4 @@ bitflags::bitflags! {
     pub struct Fsr2AutoGenerateReactiveMaskFlags: u32 {
       // TODO
     }
-}
-
-pub enum Fsr2Sharpen {
-    Disabled,
-    Enabled { sharpness: f32 },
 }

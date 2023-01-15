@@ -1,8 +1,7 @@
 mod fsr;
 
 pub use fsr::{
-    Fsr2Exposure, Fsr2InitializationFlags, Fsr2QualityMode, Fsr2ReactiveMask, Fsr2Sharpen,
-    Fsr2Texture,
+    Fsr2Exposure, Fsr2InitializationFlags, Fsr2QualityMode, Fsr2ReactiveMask, Fsr2Texture,
 };
 
 use fsr::{
@@ -24,6 +23,7 @@ use wgpu_core::api::Vulkan;
 
 // TODO: Documentation for the whole library
 
+// TODO: Thread safety?
 pub struct Fsr2Context {
     context: FfxFsr2Context,
     upscaled_resolution: UVec2,
@@ -160,7 +160,7 @@ impl Fsr2Context {
         transparency_and_composition_mask: Option<Fsr2Texture>,
         output: Fsr2Texture,
         input_resolution: UVec2,
-        sharpen: Fsr2Sharpen,
+        sharpness: f32,
         frame_delta_time: Duration,
         reset: bool,
         camera_near: f32,
@@ -186,7 +186,7 @@ impl Fsr2Context {
                 }
                 Fsr2ReactiveMask::AutoMask {
                     color_opaque_only,
-                    color_opauqe_and_transparent,
+                    color_opaque_and_transparent,
                     scale,
                     threshold,
                     binary_value,
@@ -209,11 +209,8 @@ impl Fsr2Context {
                 jitterOffset: vec2_to_float_coords2d(jitter_offset),
                 motionVectorScale: vec2_to_float_coords2d(motion_vector_scale.unwrap_or(Vec2::ONE)),
                 renderSize: uvec2_to_dim2d(input_resolution),
-                enableSharpening: !matches!(sharpen, Fsr2Sharpen::Disabled),
-                sharpness: match sharpen {
-                    Fsr2Sharpen::Disabled => 0.0,
-                    Fsr2Sharpen::Enabled { sharpness } => sharpness.clamp(0.0, 1.0),
-                },
+                enableSharpening: sharpness > 0.0,
+                sharpness: sharpness.clamp(0.0, 1.0),
                 frameTimeDelta: frame_delta_time.as_millis() as f32,
                 preExposure: pre_exposure,
                 reset,
