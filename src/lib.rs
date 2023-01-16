@@ -20,6 +20,7 @@ use std::ptr;
 use std::time::Duration;
 use wgpu::{Adapter, CommandEncoder, Device};
 use wgpu_core::api::Vulkan;
+use wgpu_hal::{CommandEncoder as _, DeviceError};
 
 // TODO: Documentation for the whole library
 
@@ -149,8 +150,10 @@ impl Fsr2Context {
         (input_resolution.x as f32 / self.upscaled_resolution.x as f32).log2() - 1.0
     }
 
-    pub fn render(&mut self, parameters: Fsr2RenderParameters) {
-        let adapter = &parameters.adapter;
+    pub fn render(&mut self, parameters: Fsr2RenderParameters) -> Result<(), DeviceError> {
+        let adapter = parameters.adapter;
+        let command_encoder = parameters.command_encoder;
+
         unsafe {
             let (exposure, pre_exposure) = match parameters.exposure {
                 Fsr2Exposure::AutoExposure => (None, 0.0),
@@ -175,11 +178,13 @@ impl Fsr2Context {
                 } => todo!(),
             };
 
+            command_encoder.as_hal_mut::<Vulkan, _, _>(|c| {
+                c.unwrap().begin_encoding(Some("fsr2_command_buffer"))
+            })?;
+
             let dispatch_description = FfxFsr2DispatchDescription {
                 commandList: ffxGetCommandListVK(
-                    parameters
-                        .command_encoder
-                        .as_hal_mut::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
+                    command_encoder.as_hal_mut::<Vulkan, _, _>(|c| c.unwrap().raw_handle()),
                 ),
                 color: self.texture_to_ffx_resource(Some(parameters.color), adapter),
                 depth: self.texture_to_ffx_resource(Some(parameters.depth), adapter),
@@ -205,11 +210,16 @@ impl Fsr2Context {
                 cameraFovAngleVertical: parameters.camera_fov_angle_vertical,
             };
 
+            // TODO: Check error code
             ffxFsr2ContextDispatch(
                 &mut self.context as *mut _,
                 &dispatch_description as *const _,
             );
+
+            command_encoder.as_hal_mut::<Vulkan, _, _>(|c| c.unwrap().end_encoding())?;
         }
+
+        Ok(())
     }
 
     unsafe fn texture_to_ffx_resource(

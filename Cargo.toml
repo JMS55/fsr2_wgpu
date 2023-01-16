@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wgpu = { git = "https://github.com/JMS55/wgpu" }
-wgpu-core = { git = "https://github.com/JMS55/wgpu" }
+wgpu = { path = "../wgpu/wgpu" }
+wgpu-core = { path = "../wgpu/wgpu-core" }
+wgpu-hal = { path = "../wgpu/wgpu-hal" }
 ash = "0.37"
 glam = "0.22"
 bitflags = "1.3"
