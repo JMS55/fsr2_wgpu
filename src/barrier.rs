@@ -1,11 +1,12 @@
 use arrayvec::ArrayVec;
 use ash::vk::{
-    AccessFlags, CommandBuffer, DependencyFlags, Image, ImageLayout, ImageMemoryBarrier,
-    PipelineStageFlags, StructureType, QUEUE_FAMILY_IGNORED,
+    AccessFlags, CommandBuffer, DependencyFlags, ImageLayout, ImageMemoryBarrier,
+    ImageSubresourceRange, PipelineStageFlags, StructureType, QUEUE_FAMILY_IGNORED,
 };
 use std::ptr;
-use wgpu::Device;
+use wgpu::{Device, Texture};
 use wgpu_core::api::Vulkan;
+use wgpu_hal::vulkan::conv;
 
 #[derive(Default)]
 pub struct Barriers {
@@ -15,11 +16,24 @@ pub struct Barriers {
 }
 
 impl Barriers {
-    pub fn add(&mut self, image: Image) {
-        let current_access_mask = todo!();
-        let current_layout = todo!();
-        let subresource_range = todo!();
-        self.current_pipeline_stage |= todo!();
+    pub unsafe fn add(&mut self, texture: &Texture) {
+        let (image, usage, aspects) = texture.as_hal::<Vulkan, _, _>(|texture| {
+            let texture = texture.unwrap();
+            (texture.raw_handle(), texture.usage, texture.aspects)
+        });
+
+        let (current_pipeline_stage, current_access_mask) =
+            conv::map_texture_usage_to_barrier(usage);
+        let current_layout = conv::derive_image_layout(usage, aspects);
+        let subresource_range = ImageSubresourceRange {
+            aspect_mask: conv::map_aspects(aspects),
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        };
+
+        self.current_pipeline_stage |= current_pipeline_stage;
 
         self.start_barriers.push(ImageMemoryBarrier {
             s_type: StructureType::IMAGE_MEMORY_BARRIER,

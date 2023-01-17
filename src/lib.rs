@@ -260,15 +260,12 @@ impl Fsr2Context {
         adapter: &Adapter,
     ) -> FfxResource {
         if let Some(Fsr2Texture { texture, view }) = texture {
-            let image = texture.as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_handle());
-            let view = view.as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_handle());
-
-            barriers.add(image);
+            barriers.add(texture);
 
             ffxGetTextureResourceVK(
                 &mut self.context as *mut _,
-                image,
-                view,
+                texture.as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
+                view.as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
                 texture.width(),
                 texture.height(),
                 adapter

@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 wgpu = { git = "https://github.com/jms55/wgpu" }
 wgpu-core = { git = "https://github.com/jms55/wgpu" }
+wgpu-hal = { git = "https://github.com/jms55/wgpu" }
 ash = "0.37"
 glam = "0.22"
 bitflags = "1.3"
