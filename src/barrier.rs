@@ -17,7 +17,7 @@ impl Barriers {
 
     // TODO: Get Device from CommandEncoder instead
 
-    pub unsafe fn cmd_start(&mut self, command_buffer: CommandBuffer, device: &Device) {
+    pub unsafe fn cmd_start(&self, command_buffer: CommandBuffer, device: &Device) {
             device.as_hal::<Vulkan, _, _>(|device| {
                 device.unwrap().raw_device().cmd_pipeline_barrier(
                     command_buffer,
@@ -31,7 +31,7 @@ impl Barriers {
             });
     }
 
-    pub unsafe fn cmd_end(&mut self, command_buffer: CommandBuffer, device: &Device) {
+    pub unsafe fn cmd_end(&self, command_buffer: CommandBuffer, device: &Device) {
             device.as_hal::<Vulkan, _, _>(|device| {
                 device.unwrap().raw_device().cmd_pipeline_barrier(
                     command_buffer,
