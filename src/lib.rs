@@ -166,10 +166,6 @@ impl Fsr2Context {
         };
 
         unsafe {
-            let device = parameters
-                .device
-                .as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_device());
-
             let command_buffer = parameters
                 .command_encoder
                 .as_hal_mut::<Vulkan, _, _>(|x| x.unwrap().open().raw_handle());
@@ -244,12 +240,12 @@ impl Fsr2Context {
                 cameraFovAngleVertical: parameters.camera_fov_angle_vertical,
             };
 
-            barriers.cmd_start(command_buffer, &device);
+            barriers.cmd_start(command_buffer, parameters.device);
             ffxFsr2ContextDispatch(
                 &mut self.context as *mut _,
                 &dispatch_description as *const _,
             );
-            barriers.cmd_end(command_buffer, &device);
+            barriers.cmd_end(command_buffer, parameters.device);
 
             parameters
                 .command_encoder

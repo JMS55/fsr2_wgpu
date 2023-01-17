@@ -1,6 +1,7 @@
 use arrayvec::ArrayVec;
 use ash::vk::{CommandBuffer, DependencyFlags, Image, ImageMemoryBarrier, PipelineStageFlags};
-use ash::Device;
+use wgpu::Device;
+use wgpu_core::api::Vulkan;
 
 #[derive(Default)]
 pub struct Barriers {
@@ -18,29 +19,33 @@ impl Barriers {
 
     pub fn cmd_start(&mut self, command_buffer: CommandBuffer, device: &Device) {
         unsafe {
-            device.cmd_pipeline_barrier(
-                command_buffer,
-                self.start_pipeline_stage,
-                PipelineStageFlags::COMPUTE_SHADER,
-                DependencyFlags::empty(),
-                &[],
-                &[],
-                &self.start_barriers,
-            );
+            device.as_hal::<Vulkan, _, _>(|device| {
+                device.cmd_pipeline_barrier(
+                    command_buffer,
+                    self.start_pipeline_stage,
+                    PipelineStageFlags::COMPUTE_SHADER,
+                    DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &self.start_barriers,
+                )
+            });
         }
     }
 
     pub fn cmd_end(&mut self, command_buffer: CommandBuffer, device: &Device) {
         unsafe {
-            device.cmd_pipeline_barrier(
-                command_buffer,
-                PipelineStageFlags::COMPUTE_SHADER,
-                self.start_pipeline_stage,
-                DependencyFlags::empty(),
-                &[],
-                &[],
-                &self.end_barriers,
-            );
+            device.as_hal::<Vulkan, _, _>(|device| {
+                device.cmd_pipeline_barrier(
+                    command_buffer,
+                    PipelineStageFlags::COMPUTE_SHADER,
+                    self.start_pipeline_stage,
+                    DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &self.end_barriers,
+                )
+            });
         }
     }
 }
