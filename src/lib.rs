@@ -1,19 +1,22 @@
+mod barrier;
 mod fsr;
 
-pub use fsr::{
+pub use crate::fsr::{
     Fsr2Exposure, Fsr2InitializationFlags, Fsr2QualityMode, Fsr2ReactiveMask, Fsr2Texture,
 };
 
-use fsr::{
+use crate::barrier::Barriers;
+use crate::fsr::{
     ffxFsr2ContextCreate, ffxFsr2ContextDestroy, ffxFsr2ContextDispatch, ffxFsr2GetJitterOffset,
     ffxFsr2GetJitterPhaseCount, FfxDimensions2D, FfxFloatCoords2D, FfxFsr2Context,
     FfxFsr2ContextDescription, FfxFsr2DispatchDescription, FfxFsr2Interface, FfxResource,
     FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
 };
-use fsr::{
+use crate::fsr::{
     ffxFsr2GetInterfaceVK, ffxFsr2GetScratchMemorySizeVK, ffxGetCommandListVK, ffxGetDeviceVK,
     ffxGetTextureResourceVK,
 };
+use ash::vk::{Format, Image, ImageView};
 use glam::{Mat4, UVec2, Vec2, Vec3};
 use std::mem::MaybeUninit;
 use std::ptr;
@@ -23,6 +26,7 @@ use wgpu_core::api::Vulkan;
 
 // TODO: Documentation for the whole library
 // TODO: Check FSR error codes
+// TODO: Validate inputs
 
 // TODO: Thread safety?
 pub struct Fsr2Context {
@@ -151,23 +155,35 @@ impl Fsr2Context {
     }
 
     pub fn render(&mut self, parameters: Fsr2RenderParameters) {
-        let adapter = parameters.adapter;
-        let command_encoder = parameters.command_encoder;
+        let mut barriers = Barriers::default();
+
+        let (exposure, pre_exposure) = match parameters.exposure {
+            Fsr2Exposure::AutoExposure => (None, 0.0),
+            Fsr2Exposure::ManualExposure {
+                pre_exposure,
+                exposure,
+            } => (Some(exposure), pre_exposure),
+        };
 
         unsafe {
-            let (exposure, pre_exposure) = match parameters.exposure {
-                Fsr2Exposure::AutoExposure => (None, 0.0),
-                Fsr2Exposure::ManualExposure {
-                    pre_exposure,
-                    exposure,
-                } => (Some(exposure), pre_exposure),
-            };
+            let device = parameters
+                .device
+                .as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_device());
+
+            let command_buffer = parameters
+                .command_encoder
+                .as_hal_mut::<Vulkan, _, _>(|x| x.unwrap().open().raw_handle());
 
             let reactive = match parameters.reactive_mask {
-                Fsr2ReactiveMask::NoMask => self.texture_to_ffx_resource(None, adapter),
-                Fsr2ReactiveMask::ManualMask(mask) => {
-                    self.texture_to_ffx_resource(Some(mask), adapter)
+                Fsr2ReactiveMask::NoMask => {
+                    self.input_texture_to_ffx_resource(None, &mut barriers, parameters.adapter)
                 }
+                Fsr2ReactiveMask::ManualMask(mask) => self.input_texture_to_ffx_resource(
+                    Some(mask),
+                    &mut barriers,
+                    parameters.adapter,
+                ),
+                #[allow(unused_variables)]
                 Fsr2ReactiveMask::AutoMask {
                     color_opaque_only,
                     color_opaque_and_transparent,
@@ -175,23 +191,44 @@ impl Fsr2Context {
                     threshold,
                     binary_value,
                     flags,
-                } => todo!(),
+                } => {
+                    todo!()
+                }
             };
 
-            let encoder =
-                command_encoder.as_hal_mut::<Vulkan, _, _>(|c| c.unwrap().open().raw_handle());
-
             let dispatch_description = FfxFsr2DispatchDescription {
-                commandList: ffxGetCommandListVK(encoder),
-                color: self.texture_to_ffx_resource(Some(parameters.color), adapter),
-                depth: self.texture_to_ffx_resource(Some(parameters.depth), adapter),
-                motionVectors: self
-                    .texture_to_ffx_resource(Some(parameters.motion_vectors), adapter),
-                exposure: self.texture_to_ffx_resource(exposure, adapter),
+                commandList: ffxGetCommandListVK(command_buffer),
+                color: self.input_texture_to_ffx_resource(
+                    Some(parameters.color),
+                    &mut barriers,
+                    parameters.adapter,
+                ),
+                depth: self.input_texture_to_ffx_resource(
+                    Some(parameters.depth),
+                    &mut barriers,
+                    parameters.adapter,
+                ),
+                motionVectors: self.input_texture_to_ffx_resource(
+                    Some(parameters.motion_vectors),
+                    &mut barriers,
+                    parameters.adapter,
+                ),
+                exposure: self.input_texture_to_ffx_resource(
+                    exposure,
+                    &mut barriers,
+                    parameters.adapter,
+                ),
                 reactive,
-                transparencyAndComposition: self
-                    .texture_to_ffx_resource(parameters.transparency_and_composition_mask, adapter),
-                output: self.texture_to_ffx_resource(Some(parameters.output), adapter),
+                transparencyAndComposition: self.input_texture_to_ffx_resource(
+                    parameters.transparency_and_composition_mask,
+                    &mut barriers,
+                    parameters.adapter,
+                ),
+                output: self.input_texture_to_ffx_resource(
+                    Some(parameters.output),
+                    &mut barriers,
+                    parameters.adapter,
+                ),
                 jitterOffset: vec2_to_float_coords2d(parameters.jitter_offset),
                 motionVectorScale: vec2_to_float_coords2d(
                     parameters.motion_vector_scale.unwrap_or(Vec2::ONE),
@@ -207,25 +244,35 @@ impl Fsr2Context {
                 cameraFovAngleVertical: parameters.camera_fov_angle_vertical,
             };
 
+            barriers.cmd_start(command_buffer, &device);
             ffxFsr2ContextDispatch(
                 &mut self.context as *mut _,
                 &dispatch_description as *const _,
             );
+            barriers.cmd_end(command_buffer, &device);
 
-            command_encoder.as_hal_mut::<Vulkan, _, _>(|c| c.unwrap().close());
+            parameters
+                .command_encoder
+                .as_hal_mut::<Vulkan, _, _>(|x| x.unwrap().close());
         }
     }
 
-    unsafe fn texture_to_ffx_resource(
+    unsafe fn input_texture_to_ffx_resource(
         &mut self,
         texture: Option<Fsr2Texture>,
+        barriers: &mut Barriers,
         adapter: &Adapter,
     ) -> FfxResource {
         if let Some(Fsr2Texture { texture, view }) = texture {
+            let image = texture.as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_handle());
+            let view = view.as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_handle());
+
+            barriers.add(image);
+
             ffxGetTextureResourceVK(
                 &mut self.context as *mut _,
-                texture.as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
-                view.as_hal::<Vulkan, _, _>(|x| x.unwrap().raw_handle()),
+                image,
+                view,
                 texture.width(),
                 texture.height(),
                 adapter
@@ -237,11 +284,11 @@ impl Fsr2Context {
         } else {
             ffxGetTextureResourceVK(
                 &mut self.context as *mut _,
-                ash::vk::Image::null(),
-                ash::vk::ImageView::null(),
+                Image::null(),
+                ImageView::null(),
                 1,
                 1,
-                ash::vk::Format::UNDEFINED,
+                Format::UNDEFINED,
                 ptr::null_mut(),
                 FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
             )
@@ -276,6 +323,7 @@ pub struct Fsr2RenderParameters<'a> {
     pub camera_fov_angle_vertical: f32,
     pub jitter_offset: Vec2,
     pub adapter: &'a Adapter,
+    pub device: &'a Device,
     pub command_encoder: &'a mut CommandEncoder,
 }
 
