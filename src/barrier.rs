@@ -20,7 +20,7 @@ impl Barriers {
     pub fn cmd_start(&mut self, command_buffer: CommandBuffer, device: &Device) {
         unsafe {
             device.as_hal::<Vulkan, _, _>(|device| {
-                device.cmd_pipeline_barrier(
+                device.unwrap().raw_device().cmd_pipeline_barrier(
                     command_buffer,
                     self.start_pipeline_stage,
                     PipelineStageFlags::COMPUTE_SHADER,
@@ -36,7 +36,7 @@ impl Barriers {
     pub fn cmd_end(&mut self, command_buffer: CommandBuffer, device: &Device) {
         unsafe {
             device.as_hal::<Vulkan, _, _>(|device| {
-                device.cmd_pipeline_barrier(
+                device.unwrap().raw_device().cmd_pipeline_barrier(
                     command_buffer,
                     PipelineStageFlags::COMPUTE_SHADER,
                     self.start_pipeline_stage,
