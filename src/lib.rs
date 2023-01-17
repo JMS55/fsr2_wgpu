@@ -20,9 +20,9 @@ use std::ptr;
 use std::time::Duration;
 use wgpu::{Adapter, CommandEncoder, Device};
 use wgpu_core::api::Vulkan;
-use wgpu_hal::{CommandEncoder as _, DeviceError};
 
 // TODO: Documentation for the whole library
+// TODO: Check FSR error codes
 
 // TODO: Thread safety?
 pub struct Fsr2Context {
@@ -150,7 +150,7 @@ impl Fsr2Context {
         (input_resolution.x as f32 / self.upscaled_resolution.x as f32).log2() - 1.0
     }
 
-    pub fn render(&mut self, parameters: Fsr2RenderParameters) -> Result<(), DeviceError> {
+    pub fn render(&mut self, parameters: Fsr2RenderParameters) {
         let adapter = parameters.adapter;
         let command_encoder = parameters.command_encoder;
 
@@ -178,14 +178,11 @@ impl Fsr2Context {
                 } => todo!(),
             };
 
-            command_encoder.as_hal_mut::<Vulkan, _, _>(|c| {
-                c.unwrap().begin_encoding(Some("fsr2_command_buffer"))
-            })?;
+            let encoder =
+                command_encoder.as_hal_mut::<Vulkan, _, _>(|c| c.unwrap().open().raw_handle());
 
             let dispatch_description = FfxFsr2DispatchDescription {
-                commandList: ffxGetCommandListVK(
-                    command_encoder.as_hal_mut::<Vulkan, _, _>(|c| c.unwrap().raw_handle()),
-                ),
+                commandList: ffxGetCommandListVK(encoder),
                 color: self.texture_to_ffx_resource(Some(parameters.color), adapter),
                 depth: self.texture_to_ffx_resource(Some(parameters.depth), adapter),
                 motionVectors: self
@@ -210,16 +207,13 @@ impl Fsr2Context {
                 cameraFovAngleVertical: parameters.camera_fov_angle_vertical,
             };
 
-            // TODO: Check error code
             ffxFsr2ContextDispatch(
                 &mut self.context as *mut _,
                 &dispatch_description as *const _,
             );
 
-            command_encoder.as_hal_mut::<Vulkan, _, _>(|c| c.unwrap().end_encoding())?;
+            command_encoder.as_hal_mut::<Vulkan, _, _>(|c| c.unwrap().close());
         }
-
-        Ok(())
     }
 
     unsafe fn texture_to_ffx_resource(

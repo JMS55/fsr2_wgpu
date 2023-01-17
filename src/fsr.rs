@@ -15,7 +15,7 @@ type VkCommandBuffer = ash::vk::CommandBuffer;
 type PFN_vkGetDeviceProcAddr = ash::vk::PFN_vkGetDeviceProcAddr;
 
 bitflags::bitflags! {
-    pub struct Fsr2InitializationFlags: u32 {
+    pub struct Fsr2InitializationFlags: FfxFsr2InitializationFlagBits {
         const AUTO_EXPOSURE = FfxFsr2InitializationFlagBits_FFX_FSR2_ENABLE_AUTO_EXPOSURE;
         const INFINITE_DEPTH = FfxFsr2InitializationFlagBits_FFX_FSR2_ENABLE_DEPTH_INFINITE;
         const INVERTED_DEPTH = FfxFsr2InitializationFlagBits_FFX_FSR2_ENABLE_DEPTH_INVERTED;
