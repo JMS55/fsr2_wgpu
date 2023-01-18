@@ -27,6 +27,7 @@ use wgpu_core::api::Vulkan;
 
 // TODO: Documentation for the whole library
 // TODO: Validate inputs
+// TODO: FSR2 command buffer does not show up under a seperate debug span
 
 // TODO: Thread safety?
 pub struct Fsr2Context {
