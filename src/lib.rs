@@ -113,21 +113,21 @@ impl Fsr2Context {
 
     pub fn jitter_camera_projection_matrix(
         &self,
-        matrix: &mut Mat4,
+        projection_matrix: &mut Mat4,
         input_resolution: UVec2,
         frame_index: i32,
     ) -> Vec2 {
         let jitter_offset = self.get_camera_jitter_offset(input_resolution, frame_index);
 
-        let mut translation = 2.0 * jitter_offset / input_resolution.as_vec2();
-        translation.y *= -1.0;
+        let mut jitter = 2.0 * jitter_offset / input_resolution.as_vec2();
+        jitter.y *= -1.0;
 
-        let translation = Mat4::from_translation(Vec3 {
-            x: translation.x,
-            y: translation.y,
+        let jitter_matrix = Mat4::from_translation(Vec3 {
+            x: jitter.x,
+            y: jitter.y,
             z: 0.0,
         });
-        *matrix = translation * *matrix;
+        *projection_matrix = jitter_matrix * *projection_matrix;
 
         jitter_offset
     }
