@@ -27,6 +27,47 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Debug)]
+pub enum Fsr2Error {
+    InvalidPointer,
+    InvalidAlignment,
+    InvalidSize,
+    Eof,
+    InvalidPath,
+    ErrorEof,
+    MalformedData,
+    OutOfMemory,
+    IncompleteInterface,
+    InvalidEnum,
+    InvalidArgument,
+    OutOfRange,
+    NullDevice,
+    BackendApiError,
+    InsufficentMemory,
+}
+
+pub fn ffx_check_result(result: FfxErrorCode) -> Result<(), Fsr2Error> {
+    match result {
+        FFX_OK => Ok(()),
+        FFX_ERROR_INVALID_POINTER => Err(Fsr2Error::InvalidPointer),
+        FFX_ERROR_INVALID_ALIGNMENT => Err(Fsr2Error::InvalidAlignment),
+        FFX_ERROR_INVALID_SIZE => Err(Fsr2Error::InvalidSize),
+        FFX_EOF => Err(Fsr2Error::Eof),
+        FFX_ERROR_INVALID_PATH => Err(Fsr2Error::InvalidPath),
+        FFX_ERROR_EOF => Err(Fsr2Error::ErrorEof),
+        FFX_ERROR_MALFORMED_DATA => Err(Fsr2Error::MalformedData),
+        FFX_ERROR_OUT_OF_MEMORY => Err(Fsr2Error::OutOfMemory),
+        FFX_ERROR_INCOMPLETE_INTERFACE => Err(Fsr2Error::IncompleteInterface),
+        FFX_ERROR_INVALID_ENUM => Err(Fsr2Error::InvalidEnum),
+        FFX_ERROR_INVALID_ARGUMENT => Err(Fsr2Error::InvalidArgument),
+        FFX_ERROR_OUT_OF_RANGE => Err(Fsr2Error::OutOfRange),
+        FFX_ERROR_NULL_DEVICE => Err(Fsr2Error::NullDevice),
+        FFX_ERROR_BACKEND_API_ERROR => Err(Fsr2Error::BackendApiError),
+        FFX_ERROR_INSUFFICIENT_MEMORY => Err(Fsr2Error::InsufficentMemory),
+        _ => unreachable!(),
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Fsr2QualityMode {
     Quality,
@@ -63,6 +104,9 @@ pub enum Fsr2ReactiveMask<'a> {
 
 bitflags::bitflags! {
     pub struct Fsr2AutoGenerateReactiveMaskFlags: u32 {
-      // TODO
+      const ApplyTonemap = FFX_FSR2_AUTOREACTIVEFLAGS_APPLY_TONEMAP;
+      const ApplyInverseTonemap = FFX_FSR2_AUTOREACTIVEFLAGS_APPLY_INVERSETONEMAP;
+      const ApplyThreshold = FFX_FSR2_AUTOREACTIVEFLAGS_APPLY_THRESHOLD;
+      const UseComponentsMax = FFX_FSR2_AUTOREACTIVEFLAGS_USE_COMPONENTS_MAX;
     }
 }

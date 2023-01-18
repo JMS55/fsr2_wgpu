@@ -2,15 +2,16 @@ mod barrier;
 mod fsr;
 
 pub use crate::fsr::{
-    Fsr2Exposure, Fsr2InitializationFlags, Fsr2QualityMode, Fsr2ReactiveMask, Fsr2Texture,
+    Fsr2Error, Fsr2Exposure, Fsr2InitializationFlags, Fsr2QualityMode, Fsr2ReactiveMask,
+    Fsr2Texture,
 };
 
 use crate::barrier::Barriers;
 use crate::fsr::{
     ffxFsr2ContextCreate, ffxFsr2ContextDestroy, ffxFsr2ContextDispatch, ffxFsr2GetJitterOffset,
-    ffxFsr2GetJitterPhaseCount, FfxDimensions2D, FfxFloatCoords2D, FfxFsr2Context,
-    FfxFsr2ContextDescription, FfxFsr2DispatchDescription, FfxFsr2Interface, FfxResource,
-    FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
+    ffxFsr2GetJitterPhaseCount, ffx_check_result, FfxDimensions2D, FfxFloatCoords2D,
+    FfxFsr2Context, FfxFsr2ContextDescription, FfxFsr2DispatchDescription, FfxFsr2Interface,
+    FfxResource, FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
 };
 use crate::fsr::{
     ffxFsr2GetInterfaceVK, ffxFsr2GetScratchMemorySizeVK, ffxGetCommandListVK, ffxGetDeviceVK,
@@ -25,7 +26,6 @@ use wgpu::{Adapter, CommandEncoder, Device};
 use wgpu_core::api::Vulkan;
 
 // TODO: Documentation for the whole library
-// TODO: Check FSR error codes
 // TODO: Validate inputs
 
 // TODO: Thread safety?
@@ -41,7 +41,7 @@ impl Fsr2Context {
         max_input_resolution: UVec2,
         upscaled_resolution: UVec2,
         initialization_flags: Fsr2InitializationFlags,
-    ) -> Self {
+    ) -> Result<Self, Fsr2Error> {
         unsafe {
             // Get underlying Vulkan objects from wgpu
             let (device, physical_device, get_device_proc_addr) =
@@ -65,13 +65,13 @@ impl Fsr2Context {
 
             // Setup an FSR->Vulkan interface
             let mut interface = MaybeUninit::<FfxFsr2Interface>::uninit();
-            ffxFsr2GetInterfaceVK(
+            ffx_check_result(ffxFsr2GetInterfaceVK(
                 interface.as_mut_ptr(),
                 scratch_memory.as_mut_ptr() as *mut _,
                 scratch_memory_size,
                 physical_device,
                 get_device_proc_addr,
-            );
+            ))?;
             let interface = interface.assume_init();
 
             // Create an FSR context
@@ -83,14 +83,17 @@ impl Fsr2Context {
                 callbacks: interface,
                 device: ffxGetDeviceVK(device),
             };
-            ffxFsr2ContextCreate(context.as_mut_ptr(), &context_description as *const _);
+            ffx_check_result(ffxFsr2ContextCreate(
+                context.as_mut_ptr(),
+                &context_description as *const _,
+            ))?;
             let context = context.assume_init();
 
-            Self {
+            Ok(Self {
                 context,
                 upscaled_resolution,
                 _scratch_memory: scratch_memory,
-            }
+            })
         }
     }
 
@@ -119,7 +122,7 @@ impl Fsr2Context {
     ) -> Vec2 {
         let jitter_offset = self.get_camera_jitter_offset(input_resolution, frame_index);
 
-        let jitter = (2.0 * jitter_offset )/ input_resolution.as_vec2();
+        let jitter = (2.0 * jitter_offset) / input_resolution.as_vec2();
         let jitter_matrix = Mat4::from_translation(Vec3 {
             x: jitter.x,
             y: -jitter.y,
@@ -152,7 +155,7 @@ impl Fsr2Context {
         (input_resolution.x as f32 / self.upscaled_resolution.x as f32).log2() - 1.0
     }
 
-    pub fn render(&mut self, parameters: Fsr2RenderParameters) {
+    pub fn render(&mut self, parameters: Fsr2RenderParameters) -> Result<(), Fsr2Error> {
         let mut barriers = Barriers::default();
 
         let (exposure, pre_exposure) = match parameters.exposure {
@@ -239,15 +242,17 @@ impl Fsr2Context {
             };
 
             barriers.cmd_start(command_buffer, parameters.device);
-            ffxFsr2ContextDispatch(
+            let result = ffx_check_result(ffxFsr2ContextDispatch(
                 &mut self.context as *mut _,
                 &dispatch_description as *const _,
-            );
+            ));
             barriers.cmd_end(command_buffer, parameters.device);
 
             parameters
                 .command_encoder
                 .as_hal_mut::<Vulkan, _, _>(|x| x.unwrap().close());
+
+            result
         }
     }
 
@@ -291,7 +296,8 @@ impl Drop for Fsr2Context {
     fn drop(&mut self) {
         unsafe {
             // TODO: Wait for FSR resources to not be in use somehow
-            ffxFsr2ContextDestroy(&mut self.context as *mut _);
+            ffx_check_result(ffxFsr2ContextDestroy(&mut self.context as *mut _))
+                .expect("Failed to destroy Fsr2Context");
         }
     }
 }
