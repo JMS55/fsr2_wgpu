@@ -111,27 +111,6 @@ impl Fsr2Context {
         (self.upscaled_resolution.as_vec2() / scale_factor).as_uvec2()
     }
 
-    pub fn jitter_camera_projection_matrix(
-        &self,
-        projection_matrix: &mut Mat4,
-        input_resolution: UVec2,
-        frame_index: i32,
-    ) -> Vec2 {
-        let jitter_offset = self.get_camera_jitter_offset(input_resolution, frame_index);
-
-        let mut jitter = 2.0 * jitter_offset / input_resolution.as_vec2();
-        jitter.y *= -1.0;
-
-        let jitter_matrix = Mat4::from_translation(Vec3 {
-            x: jitter.x,
-            y: jitter.y,
-            z: 0.0,
-        });
-        *projection_matrix = jitter_matrix * *projection_matrix;
-
-        jitter_offset
-    }
-
     pub fn get_camera_jitter_offset(&self, input_resolution: UVec2, frame_index: i32) -> Vec2 {
         unsafe {
             let phase_count = ffxFsr2GetJitterPhaseCount(
