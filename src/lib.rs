@@ -21,6 +21,7 @@ use ash::vk::{Format, Image, ImageView};
 use glam::{Mat4, UVec2, Vec2, Vec3};
 use std::mem::MaybeUninit;
 use std::ptr;
+use std::sync::Arc;
 use std::time::Duration;
 use wgpu::{Adapter, CommandEncoder, Device};
 use wgpu_core::api::Vulkan;
@@ -29,23 +30,23 @@ use wgpu_core::api::Vulkan;
 // TODO: Validate inputs
 // TODO: FSR2 command buffer does not show up under a seperate debug span
 
-// TODO: Thread safety?
 pub struct Fsr2Context {
     context: FfxFsr2Context,
+    device: Arc<Device>,
     upscaled_resolution: UVec2,
     _scratch_memory: Vec<u8>,
 }
 
 impl Fsr2Context {
     pub fn new(
-        device: &Device,
+        device: Arc<Device>,
         max_input_resolution: UVec2,
         upscaled_resolution: UVec2,
         initialization_flags: Fsr2InitializationFlags,
     ) -> Result<Self, Fsr2Error> {
         unsafe {
             // Get underlying Vulkan objects from wgpu
-            let (device, physical_device, get_device_proc_addr) =
+            let (vk_device, physical_device, get_device_proc_addr) =
                 device.as_hal::<Vulkan, _, _>(|device| {
                     let device = device.unwrap();
                     let raw_device = device.raw_device().handle();
@@ -82,7 +83,7 @@ impl Fsr2Context {
                 maxRenderSize: uvec2_to_dim2d(max_input_resolution),
                 displaySize: uvec2_to_dim2d(upscaled_resolution),
                 callbacks: interface,
-                device: ffxGetDeviceVK(device),
+                device: ffxGetDeviceVK(vk_device),
             };
             ffx_check_result(ffxFsr2ContextCreate(
                 context.as_mut_ptr(),
@@ -92,6 +93,7 @@ impl Fsr2Context {
 
             Ok(Self {
                 context,
+                device,
                 upscaled_resolution,
                 _scratch_memory: scratch_memory,
             })
@@ -242,12 +244,12 @@ impl Fsr2Context {
                 cameraFovAngleVertical: parameters.camera_fov_angle_vertical,
             };
 
-            barriers.cmd_start(command_buffer, parameters.device);
+            barriers.cmd_start(command_buffer, &self.device);
             let result = ffx_check_result(ffxFsr2ContextDispatch(
                 &mut self.context as *mut _,
                 &dispatch_description as *const _,
             ));
-            barriers.cmd_end(command_buffer, parameters.device);
+            barriers.cmd_end(command_buffer, &self.device);
 
             parameters
                 .command_encoder
@@ -296,7 +298,15 @@ impl Fsr2Context {
 impl Drop for Fsr2Context {
     fn drop(&mut self) {
         unsafe {
-            // TODO: Wait for FSR resources to not be in use somehow
+            // TODO: Less coarse waiting logic, maybe a fence on the command buffer
+            self.device.as_hal::<Vulkan, _, _>(|device| {
+                device
+                    .unwrap()
+                    .raw_device()
+                    .device_wait_idle()
+                    .expect("Failed to wait for idle device when destroying Fsr2Context")
+            });
+
             ffx_check_result(ffxFsr2ContextDestroy(&mut self.context as *mut _))
                 .expect("Failed to destroy Fsr2Context");
         }
@@ -321,7 +331,6 @@ pub struct Fsr2RenderParameters<'a> {
     pub camera_fov_angle_vertical: f32,
     pub jitter_offset: Vec2,
     pub adapter: &'a Adapter,
-    pub device: &'a Device,
     pub command_encoder: &'a mut CommandEncoder,
 }
 
