@@ -100,12 +100,6 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
         }
     }
 
-    pub fn set_new_upscale_resolution_if_changed(&mut self, new_upscaled_resolution: UVec2) {
-        if new_upscaled_resolution != self.upscaled_resolution {
-            todo!("Recreate context, destroy old one");
-        }
-    }
-
     pub fn get_suggested_input_resolution(&self, quality_mode: Fsr2QualityMode) -> UVec2 {
         let scale_factor = match quality_mode {
             Fsr2QualityMode::Quality => 1.5,
