@@ -20,8 +20,8 @@ use crate::fsr::{
 use ash::vk::{Format, Image, ImageView};
 use glam::{Mat4, UVec2, Vec2, Vec3};
 use std::mem::MaybeUninit;
+use std::ops::Deref;
 use std::ptr;
-use std::sync::Arc;
 use std::time::Duration;
 use wgpu::{Adapter, CommandEncoder, Device};
 use wgpu_core::api::Vulkan;
@@ -30,16 +30,16 @@ use wgpu_core::api::Vulkan;
 // TODO: Validate inputs
 // TODO: FSR2 command buffer does not show up under a seperate debug span
 
-pub struct Fsr2Context {
+pub struct Fsr2Context<D: Deref<Target = Device>> {
     context: FfxFsr2Context,
-    device: Arc<Device>,
+    device: D,
     upscaled_resolution: UVec2,
     _scratch_memory: Vec<u8>,
 }
 
-impl Fsr2Context {
+impl<D: Deref<Target = Device>> Fsr2Context<D> {
     pub fn new(
-        device: Arc<Device>,
+        device: D,
         max_input_resolution: UVec2,
         upscaled_resolution: UVec2,
         initialization_flags: Fsr2InitializationFlags,
@@ -295,7 +295,7 @@ impl Fsr2Context {
     }
 }
 
-impl Drop for Fsr2Context {
+impl<D: Deref<Target = Device>> Drop for Fsr2Context<D> {
     fn drop(&mut self) {
         unsafe {
             // TODO: Less coarse waiting logic, maybe a fence on the command buffer
