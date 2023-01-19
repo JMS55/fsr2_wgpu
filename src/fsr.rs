@@ -27,22 +27,47 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
+pub enum Fsr2WgpuError {
+    #[error(transparent)]
+    Fsr2(#[from] Fsr2Error),
+    #[error(transparent)]
+    Wgpu(#[from] wgpu_hal::DeviceError),
+    #[error(transparent)]
+    Vulkan(#[from] ash::vk::Result),
+}
+
+#[derive(thiserror::Error, Debug)]
 pub enum Fsr2Error {
+    #[error("TODO")]
     InvalidPointer,
+    #[error("TODO")]
     InvalidAlignment,
+    #[error("TODO")]
     InvalidSize,
+    #[error("TODO")]
     Eof,
+    #[error("TODO")]
     InvalidPath,
+    #[error("TODO")]
     ErrorEof,
+    #[error("TODO")]
     MalformedData,
+    #[error("TODO")]
     OutOfMemory,
+    #[error("TODO")]
     IncompleteInterface,
+    #[error("TODO")]
     InvalidEnum,
+    #[error("TODO")]
     InvalidArgument,
+    #[error("TODO")]
     OutOfRange,
+    #[error("TODO")]
     NullDevice,
+    #[error("TODO")]
     BackendApiError,
+    #[error("TODO")]
     InsufficentMemory,
 }
 

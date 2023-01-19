@@ -16,7 +16,7 @@ pub struct Barriers {
 }
 
 impl Barriers {
-    pub unsafe fn add(&mut self, texture: &Texture) {
+    pub unsafe fn add(&mut self, texture: &Texture, new_layout: ImageLayout) {
         let (image, usage, aspects) = texture.as_hal::<Vulkan, _, _>(|texture| {
             let texture = texture.unwrap();
             (texture.raw_handle(), texture.usage, texture.aspects)
@@ -41,7 +41,7 @@ impl Barriers {
             src_access_mask: current_access_mask,
             dst_access_mask: AccessFlags::SHADER_READ,
             old_layout: current_layout,
-            new_layout: ImageLayout::READ_ONLY_OPTIMAL,
+            new_layout,
             src_queue_family_index: QUEUE_FAMILY_IGNORED,
             dst_queue_family_index: QUEUE_FAMILY_IGNORED,
             image,
@@ -53,7 +53,7 @@ impl Barriers {
             p_next: ptr::null(),
             dst_access_mask: current_access_mask,
             src_access_mask: AccessFlags::SHADER_READ,
-            old_layout: ImageLayout::READ_ONLY_OPTIMAL,
+            old_layout: new_layout,
             new_layout: current_layout,
             src_queue_family_index: QUEUE_FAMILY_IGNORED,
             dst_queue_family_index: QUEUE_FAMILY_IGNORED,
@@ -61,8 +61,6 @@ impl Barriers {
             subresource_range,
         });
     }
-
-    // TODO: Get Device from CommandEncoder instead
 
     pub unsafe fn cmd_start(&self, command_buffer: CommandBuffer, device: &Device) {
         device.as_hal::<Vulkan, _, _>(|device| {
