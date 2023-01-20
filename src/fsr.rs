@@ -33,8 +33,6 @@ pub enum Fsr2WgpuError {
     Fsr2(#[from] Fsr2Error),
     #[error(transparent)]
     Wgpu(#[from] wgpu_hal::DeviceError),
-    #[error(transparent)]
-    Vulkan(#[from] ash::vk::Result),
 }
 
 #[derive(thiserror::Error, Debug)]

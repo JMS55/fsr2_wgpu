@@ -20,7 +20,7 @@ use crate::fsr::{
     ffxFsr2GetInterfaceVK, ffxFsr2GetScratchMemorySizeVK, ffxGetCommandListVK, ffxGetDeviceVK,
     ffxGetTextureResourceVK,
 };
-use ash::vk::{Fence, Format, Image, ImageLayout, ImageView, SubmitInfo};
+use ash::vk::{Format, Image, ImageLayout, ImageView};
 use glam::{Mat4, UVec2, Vec2, Vec3};
 use std::mem::MaybeUninit;
 use std::ops::Deref;
@@ -28,7 +28,6 @@ use std::ptr;
 use std::time::Duration;
 use wgpu::{Adapter, CommandEncoder, Device};
 use wgpu_core::api::Vulkan;
-use wgpu_hal::CommandEncoder as _;
 
 // TODO: Documentation for the whole library
 // TODO: Validate inputs
@@ -167,14 +166,9 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
         };
 
         unsafe {
-            let command_buffer =
-                parameters
-                    .command_encoder
-                    .as_hal_mut::<Vulkan, _, _>(|command_encoder| {
-                        let command_encoder = command_encoder.unwrap();
-                        let result = command_encoder.begin_encoding(Some("fsr2"));
-                        result.map(|_| command_encoder.raw_handle())
-                    })?;
+            let command_buffer = parameters
+                .command_encoder
+                .as_hal_mut::<Vulkan, _, _>(|cmd_encoder| cmd_encoder.unwrap().raw_handle());
 
             let reactive = match parameters.reactive_mask {
                 Fsr2ReactiveMask::NoMask => self.input_texture_to_ffx_resource(
@@ -271,23 +265,6 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
             ));
             barriers.cmd_end(command_buffer, &self.device);
             fsr2_dispatch_result?;
-
-            let command_buffer =
-                parameters
-                    .command_encoder
-                    .as_hal_mut::<Vulkan, _, _>(|command_encoder| {
-                        command_encoder.unwrap().end_encoding()
-                    })?;
-
-            self.device.as_hal::<Vulkan, _, _>(|device| {
-                let device = device.unwrap();
-                let submit_info = SubmitInfo::builder()
-                    .command_buffers(&[command_buffer.raw])
-                    .build();
-                device
-                    .raw_device()
-                    .queue_submit(device.raw_queue(), &[submit_info], Fence::null())
-            })?;
         }
 
         Ok(())
