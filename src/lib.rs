@@ -31,6 +31,7 @@ use wgpu_core::api::Vulkan;
 
 // TODO: Documentation for the whole library
 // TODO: Validate inputs
+// TODO: Debug spans
 
 pub struct Fsr2Context<D: Deref<Target = Device>> {
     context: FfxFsr2Context,
