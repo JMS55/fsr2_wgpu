@@ -1,4 +1,3 @@
-mod barrier;
 mod fsr;
 
 pub use crate::fsr::{
@@ -7,7 +6,6 @@ pub use crate::fsr::{
 };
 pub use wgpu_hal::DeviceError;
 
-use crate::barrier::Barriers;
 use crate::fsr::{
     ffxFsr2ContextCreate, ffxFsr2ContextDestroy, ffxFsr2ContextDispatch, ffxFsr2GetJitterOffset,
     ffxFsr2GetJitterPhaseCount, ffx_check_result, FfxDimensions2D, FfxFloatCoords2D,
@@ -20,14 +18,18 @@ use crate::fsr::{
     ffxFsr2GetInterfaceVK, ffxFsr2GetScratchMemorySizeVK, ffxGetCommandListVK, ffxGetDeviceVK,
     ffxGetTextureResourceVK,
 };
-use ash::vk::{Format, Image, ImageLayout, ImageView};
+use arrayvec::ArrayVec;
+use ash::vk::{Format, Image, ImageView};
 use glam::{Mat4, UVec2, Vec2, Vec3};
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::ptr;
 use std::time::Duration;
-use wgpu::{Adapter, CommandEncoder, Device};
+use wgpu::util::CommandEncoderExt;
+use wgpu::{Adapter, CommandEncoder, Device, Texture};
 use wgpu_core::api::Vulkan;
+use wgpu_core::track::TextureSelector;
+use wgpu_hal::TextureUses;
 
 // TODO: Documentation for the whole library
 // TODO: Validate inputs
@@ -156,7 +158,7 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
     }
 
     pub fn render(&mut self, parameters: Fsr2RenderParameters) -> Result<(), Fsr2WgpuError> {
-        let mut barriers = Barriers::default();
+        let mut texture_transitions = ArrayVec::<_, 7>::new();
 
         let (exposure, pre_exposure) = match parameters.exposure {
             Fsr2Exposure::AutoExposure => (None, 1.0),
@@ -174,16 +176,16 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
             let reactive = match parameters.reactive_mask {
                 Fsr2ReactiveMask::NoMask => self.input_texture_to_ffx_resource(
                     None,
-                    ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    TextureUses::RESOURCE,
                     FfxResourceStates_FFX_RESOURCE_STATE_GENERIC_READ,
-                    &mut barriers,
+                    &mut texture_transitions,
                     parameters.adapter,
                 ),
                 Fsr2ReactiveMask::ManualMask(mask) => self.input_texture_to_ffx_resource(
                     Some(mask),
-                    ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    TextureUses::RESOURCE,
                     FfxResourceStates_FFX_RESOURCE_STATE_GENERIC_READ,
-                    &mut barriers,
+                    &mut texture_transitions,
                     parameters.adapter,
                 ),
                 #[allow(unused_variables)]
@@ -203,45 +205,45 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
                 commandList: ffxGetCommandListVK(command_buffer),
                 color: self.input_texture_to_ffx_resource(
                     Some(parameters.color),
-                    ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    TextureUses::RESOURCE,
                     FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
-                    &mut barriers,
+                    &mut texture_transitions,
                     parameters.adapter,
                 ),
                 depth: self.input_texture_to_ffx_resource(
                     Some(parameters.depth),
-                    ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    TextureUses::RESOURCE,
                     FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
-                    &mut barriers,
+                    &mut texture_transitions,
                     parameters.adapter,
                 ),
                 motionVectors: self.input_texture_to_ffx_resource(
                     Some(parameters.motion_vectors),
-                    ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    TextureUses::RESOURCE,
                     FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
-                    &mut barriers,
+                    &mut texture_transitions,
                     parameters.adapter,
                 ),
                 exposure: self.input_texture_to_ffx_resource(
                     exposure,
-                    ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    TextureUses::RESOURCE,
                     FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
-                    &mut barriers,
+                    &mut texture_transitions,
                     parameters.adapter,
                 ),
                 reactive,
                 transparencyAndComposition: self.input_texture_to_ffx_resource(
                     parameters.transparency_and_composition_mask,
-                    ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    TextureUses::RESOURCE,
                     FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
-                    &mut barriers,
+                    &mut texture_transitions,
                     parameters.adapter,
                 ),
                 output: self.input_texture_to_ffx_resource(
                     Some(parameters.output),
-                    ImageLayout::GENERAL,
+                    TextureUses::RESOURCE, // TODO
                     FfxResourceStates_FFX_RESOURCE_STATE_UNORDERED_ACCESS,
-                    &mut barriers,
+                    &mut texture_transitions,
                     parameters.adapter,
                 ),
                 jitterOffset: vec2_to_float_coords2d(parameters.jitter_offset),
@@ -259,28 +261,35 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
                 cameraFovAngleVertical: parameters.camera_fov_angle_vertical,
             };
 
-            barriers.cmd_start(command_buffer, &self.device);
-            let fsr2_dispatch_result = ffx_check_result(ffxFsr2ContextDispatch(
+            parameters
+                .command_encoder
+                .transition_textures(&texture_transitions);
+            ffx_check_result(ffxFsr2ContextDispatch(
                 &mut self.context as *mut _,
                 &dispatch_description as *const _,
-            ));
-            barriers.cmd_end(command_buffer, &self.device);
-            fsr2_dispatch_result?;
+            ))?;
         }
 
         Ok(())
     }
 
-    unsafe fn input_texture_to_ffx_resource(
+    unsafe fn input_texture_to_ffx_resource<'a>(
         &mut self,
-        texture: Option<Fsr2Texture>,
-        new_layout: ImageLayout,
+        texture: Option<Fsr2Texture<'a>>,
+        new_use: TextureUses,
         resource_state: FfxResourceStates,
-        barriers: &mut Barriers,
+        texture_uses: &mut ArrayVec<(&'a Texture, TextureUses, TextureSelector), 7>,
         adapter: &Adapter,
     ) -> FfxResource {
         if let Some(Fsr2Texture { texture, view }) = texture {
-            barriers.add(texture, new_layout);
+            texture_uses.push((
+                texture,
+                new_use,
+                TextureSelector {
+                    mips: 0..1,
+                    layers: 0..1,
+                },
+            ));
 
             ffxGetTextureResourceVK(
                 &mut self.context as *mut _,
