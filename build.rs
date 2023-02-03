@@ -3,11 +3,9 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
-    let vulkan_sdk = env::var("VULKAN_SDK").expect("$VULKAN_SDK environment variable not set");
+    let vulkan_sdk = env::var("VULKAN_SDK").expect("VULKAN_SDK environment variable not set");
 
     println!("cargo:rustc-link-search=native=./fsr2/lib");
-    println!("cargo:rustc-link-lib=dylib=stdc++");
-
     #[cfg(debug_assertions)]
     {
         println!("cargo:rustc-link-lib=static=ffx_fsr2_api_x86_64d");
@@ -36,6 +34,7 @@ fn main() {
         .clang_args(["-x", "c++"])
         .clang_arg("-fdeclspec")
         .clang_arg(format!("-I{vulkan_sdk}/Include"))
+        .clang_arg("-stdlib=libc++")
         .blocklist_type("VkPhysicalDevice")
         .blocklist_type("VkDevice")
         .blocklist_type("VkImage")
