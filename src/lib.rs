@@ -84,7 +84,7 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
             // Create an FSR context
             let mut context = MaybeUninit::<FfxFsr2Context>::uninit();
             let context_description = FfxFsr2ContextDescription {
-                flags: initialization_flags.bits(),
+                flags: initialization_flags.bits() as u32,
                 maxRenderSize: uvec2_to_dim2d(max_input_resolution),
                 displaySize: uvec2_to_dim2d(upscaled_resolution),
                 callbacks: interface,
