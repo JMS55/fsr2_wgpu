@@ -33,7 +33,7 @@ use wgpu_hal::TextureUses;
 
 // TODO: Documentation for the whole library
 // TODO: Validate inputs
-// TODO: Debug spans
+// TODO: GPU Debug spans
 
 pub struct Fsr2Context<D: Deref<Target = Device>> {
     context: FfxFsr2Context,
