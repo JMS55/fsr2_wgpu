@@ -321,7 +321,6 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
 impl<D: Deref<Target = Device>> Drop for Fsr2Context<D> {
     fn drop(&mut self) {
         unsafe {
-            // TODO: Less coarse waiting logic using a fence on the command buffer submission
             self.device.as_hal::<Vulkan, _, _>(|device| {
                 device
                     .unwrap()
