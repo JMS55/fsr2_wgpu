@@ -105,7 +105,7 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
         }
     }
 
-    pub fn get_suggested_input_resolution(&self, quality_mode: Fsr2QualityMode) -> UVec2 {
+    pub fn suggested_input_resolution(&self, quality_mode: Fsr2QualityMode) -> UVec2 {
         let scale_factor = match quality_mode {
             Fsr2QualityMode::Quality => 1.5,
             Fsr2QualityMode::Balanced => 1.7,
@@ -114,6 +114,10 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
         };
 
         (self.upscaled_resolution.as_vec2() / scale_factor).as_uvec2()
+    }
+
+    pub fn upscaled_resolution(&self) -> UVec2 {
+        self.upscaled_resolution
     }
 
     pub fn jitter_camera_projection_matrix(
@@ -135,7 +139,11 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
         jitter_offset
     }
 
-    pub fn get_camera_jitter_offset(&self, input_resolution: UVec2, frame_index: i32) -> Vec2 {
+    pub fn suggested_camera_jitter_offset(
+        &self,
+        input_resolution: UVec2,
+        frame_index: i32,
+    ) -> Vec2 {
         unsafe {
             let phase_count = ffxFsr2GetJitterPhaseCount(
                 input_resolution.x.try_into().unwrap(),
@@ -153,7 +161,7 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
         }
     }
 
-    pub fn get_mip_bias(&self, input_resolution: UVec2) -> f32 {
+    pub fn suggested_mip_bias(&self, input_resolution: UVec2) -> f32 {
         (input_resolution.x as f32 / self.upscaled_resolution.x as f32).log2() - 1.0
     }
 
