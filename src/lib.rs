@@ -126,7 +126,7 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
         input_resolution: UVec2,
         frame_index: i32,
     ) -> Vec2 {
-        let jitter_offset = self.get_camera_jitter_offset(input_resolution, frame_index);
+        let jitter_offset = self.suggested_camera_jitter_offset(input_resolution, frame_index);
 
         let jitter = (2.0 * jitter_offset) / input_resolution.as_vec2();
         let jitter_matrix = Mat4::from_translation(Vec3 {
