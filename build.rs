@@ -28,12 +28,17 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=vulkan-1");
     }
 
+    #[cfg(not(target_os = "windows"))]
+    let vulkan_sdk_include = "include";
+    #[cfg(target_os = "windows")]
+    let vulkan_sdk_include = "Include";
+
     let bindings = Builder::default()
         .header("fsr2/include/ffx_fsr2.h")
         .header("fsr2/include/vk/ffx_fsr2_vk.h")
         .clang_args(["-x", "c++"])
         .clang_arg("-fdeclspec")
-        .clang_arg(format!("-I{vulkan_sdk}/Include"))
+        .clang_arg(format!("-I{vulkan_sdk}/{vulkan_sdk_include}"))
         .clang_arg("-stdlib=libc++")
         .blocklist_type("VkPhysicalDevice")
         .blocklist_type("VkDevice")
