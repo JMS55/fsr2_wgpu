@@ -21,6 +21,7 @@ fn main() {
     {
         println!("cargo:rustc-link-search=native={vulkan_sdk}/lib");
         println!("cargo:rustc-link-lib=dylib=vulkan");
+        println!("cargo:rustc-link-lib=dylib=stdc++");
     }
     #[cfg(target_os = "windows")]
     {
