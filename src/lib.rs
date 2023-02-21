@@ -31,9 +31,11 @@ use wgpu_core::api::Vulkan;
 use wgpu_core::track::TextureSelector;
 use wgpu_hal::TextureUses;
 
+// TODO: Fix TODOs
+// TODO: FSR 2.2
 // TODO: Documentation for the whole library
-// TODO: Validate inputs
 // TODO: GPU Debug spans
+// TODO: Validate inputs
 
 pub struct Fsr2Context<D: Deref<Target = Device>> {
     context: FfxFsr2Context,
@@ -220,7 +222,7 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
                 ),
                 depth: self.input_texture_to_ffx_resource(
                     Some(parameters.depth),
-                    TextureUses::RESOURCE,
+                    TextureUses::RESOURCE, // TODO: Needs to be SHADER_READ_ONLY, not depth stencil
                     FfxResourceStates_FFX_RESOURCE_STATE_COMPUTE_READ,
                     &mut texture_transitions,
                     parameters.adapter,
@@ -249,7 +251,7 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
                 ),
                 output: self.input_texture_to_ffx_resource(
                     Some(parameters.output),
-                    TextureUses::RESOURCE, // TODO
+                    TextureUses::RESOURCE, // TODO: Needs to be GENERAL, not SHADER_READ_ONLY
                     FfxResourceStates_FFX_RESOURCE_STATE_UNORDERED_ACCESS,
                     &mut texture_transitions,
                     parameters.adapter,
@@ -289,30 +291,31 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
         texture_uses: &mut ArrayVec<(&'a Texture, TextureUses, TextureSelector), 7>,
         adapter: &Adapter,
     ) -> FfxResource {
-        if let Some(Fsr2Texture { texture, view }) = texture {
-            texture_uses.push((
-                texture,
-                new_use,
-                TextureSelector {
-                    mips: 0..1,
-                    layers: 0..1,
-                },
-            ));
+        match texture {
+            Some(Fsr2Texture { texture, view }) => {
+                texture_uses.push((
+                    texture,
+                    new_use,
+                    TextureSelector {
+                        mips: 0..1,
+                        layers: 0..1,
+                    },
+                ));
 
-            ffxGetTextureResourceVK(
-                &mut self.context as *mut _,
-                texture.as_hal::<Vulkan, _, _>(|texture| texture.unwrap().raw_handle()),
-                view.as_hal::<Vulkan, _, _>(|view| view.unwrap().raw_handle()),
-                texture.width(),
-                texture.height(),
-                adapter
-                    .texture_format_as_hal::<Vulkan>(texture.format())
-                    .unwrap(),
-                ptr::null_mut(),
-                resource_state,
-            )
-        } else {
-            ffxGetTextureResourceVK(
+                ffxGetTextureResourceVK(
+                    &mut self.context as *mut _,
+                    texture.as_hal::<Vulkan, _, _>(|texture| texture.unwrap().raw_handle()),
+                    view.as_hal::<Vulkan, _, _>(|view| view.unwrap().raw_handle()),
+                    texture.width(),
+                    texture.height(),
+                    adapter
+                        .texture_format_as_hal::<Vulkan>(texture.format())
+                        .unwrap(),
+                    ptr::null_mut(),
+                    resource_state,
+                )
+            }
+            None => ffxGetTextureResourceVK(
                 &mut self.context as *mut _,
                 Image::null(),
                 ImageView::null(),
@@ -321,7 +324,7 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
                 Format::UNDEFINED,
                 ptr::null_mut(),
                 resource_state,
-            )
+            ),
         }
     }
 }
