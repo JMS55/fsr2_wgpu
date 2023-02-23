@@ -109,6 +109,7 @@ impl<D: Deref<Target = Device>> Fsr2Context<D> {
 
     pub fn suggested_input_resolution(&self, quality_mode: Fsr2QualityMode) -> UVec2 {
         let scale_factor = match quality_mode {
+            Fsr2QualityMode::Native => 1.0,
             Fsr2QualityMode::Quality => 1.5,
             Fsr2QualityMode::Balanced => 1.7,
             Fsr2QualityMode::Performance => 2.0,

@@ -93,6 +93,7 @@ pub fn ffx_check_result(result: FfxErrorCode) -> Result<(), Fsr2Error> {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Fsr2QualityMode {
+    Native,
     Quality,
     Balanced,
     Performance,
