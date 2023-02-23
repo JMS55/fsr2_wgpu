@@ -8,13 +8,13 @@ fn main() {
     println!("cargo:rustc-link-search=native=./fsr2/lib");
     #[cfg(debug_assertions)]
     {
-        println!("cargo:rustc-link-lib=static=ffx_fsr2_api_x86_64d");
-        println!("cargo:rustc-link-lib=static=ffx_fsr2_api_vk_x86_64d");
+        println!("cargo:rustc-link-lib=static=ffx_fsr2_api_x64d");
+        println!("cargo:rustc-link-lib=static=ffx_fsr2_api_vk_x64d");
     }
     #[cfg(not(debug_assertions))]
     {
-        println!("cargo:rustc-link-lib=static=ffx_fsr2_api_x86_64");
-        println!("cargo:rustc-link-lib=static=ffx_fsr2_api_vk_x86_64");
+        println!("cargo:rustc-link-lib=static=ffx_fsr2_api_x64");
+        println!("cargo:rustc-link-lib=static=ffx_fsr2_api_vk_x64");
     }
 
     #[cfg(not(target_os = "windows"))]
