@@ -338,7 +338,7 @@ impl<D: Deref<Target = Device>> Drop for Fsr2Context<D> {
                     .unwrap()
                     .raw_device()
                     .device_wait_idle()
-                    .expect("Failed to wait for idle device when destroying Fsr2Context")
+                    .expect("Failed to wait for idle device when destroying Fsr2Context");
             });
 
             ffx_check_result(ffxFsr2ContextDestroy(&mut self.context as *mut _))
