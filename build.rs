@@ -40,7 +40,7 @@ fn main() {
         .clang_args(["-x", "c++"])
         .clang_arg("-fdeclspec")
         .clang_arg(format!("-I{vulkan_sdk}/{vulkan_sdk_include}"))
-        .clang_arg("-stdlib=libc++")
+        .clang_arg("-stdlib=libc++") // TODO: Not needed on windows?
         .blocklist_type("VkPhysicalDevice")
         .blocklist_type("VkDevice")
         .blocklist_type("VkImage")

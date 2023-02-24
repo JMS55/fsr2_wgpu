@@ -3,7 +3,7 @@
 
 ## Building FSR2 Static Libraries
 ### Windows
-* Install Clang, CMake, Git, and Visual Studio
+* Install Visual Studio, Clang, CMake, and Git
 * Clone https://github.com/GPUOpen-Effects/FidelityFX-FSR2
 * Run `FidelityFX-FSR2\GenerateSolutions.bat`
 * Open `FidelityFX-FSR2\build\VK\FSR2_Sample_VK.sln`
@@ -11,5 +11,6 @@
     * This is a workaround for the following [rustc issue](https://github.com/rust-lang/rust/issues/39016)
 * Build `ffx_fsr2_api_x64` and `ffx_fsr2_api_vk_x64` in both `Debug` and `Release` configurations
 * Copy the 4 static libraries from `FidelityFX-FSR2\bin\ffx_fsr2_api` to `fsr2_wgpu\fsr2\lib`
+
 ## Linux
 * TODO
